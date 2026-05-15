@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bonnetjes — Max & Merijn</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DM Sans', sans-serif; background: #F2EBE0; min-height: 100vh; }
+    button { cursor: pointer; font-family: inherit; }
+    button:hover { opacity: 0.85; }
+    input:focus, select:focus, textarea:focus { outline: 2px solid #B8956A; outline-offset: 1px; }
+    select, input, textarea { font-family: 'DM Mono', monospace; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="module">
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+const CLIENT_ID  = "856812113827-82itv8frk2n9go958la7bpp2dtdq3auh.apps.googleusercontent.com";
+const SHEET_ID   = "1lBexscoq1sUY6rVje6vq3k34VJGO3yXPC2pee_BRIFI";
+const FOLDER_ID  = "1QMuTXenffjlNxxKBwR7xRuMs53jMaQ_4";
+const SCOPES     = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive";
+const SHEET_NAME = "Bonnetjes";
+const SET_NAME   = "Instellingen";
+const SHEET_HDR  = ["ID","Winkel","Locatie","Categorieën","Persoon","Datum","Bedrag","Retour","Status","Garantie","Notitie","FotoUrl","ProductFotoUrl"];
+
+// ─── DEFAULTS ─────────────────────────────────────────────────────────────────
+const DEFAULT_CATS = [
+  { id:"materiaal",   label:"Materiaal",       emoji:"🪵", color:"#8B5E2A" },
+  { id:"gereedschap", label:"Gereedschap",      emoji:"🔧", color:"#2A6A8B" },
+  { id:"verf",        label:"Verf & Afwerking", emoji:"🎨", color:"#6A2A8B" },
+  { id:"elektra",     label:"Elektra",          emoji:"⚡", color:"#8B7A00" },
+  { id:"sanitair",    label:"Sanitair",         emoji:"🚿", color:"#1A7A6A" },
+  { id:"overig",      label:"Overig",           emoji:"📦", color:"#5A5A5A" },
+];
+const DEFAULT_BUDGETS = { materiaal:2000, gereedschap:500, verf:600, elektra:400, sanitair:800, overig:300 };
+const PERSONS        = ["Max","Merijn"];
+const STATUS_OPTIONS = ["actief","deels retour","volledig retour"];
+const MONTHS         = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+const EMOJI_OPTIONS  = ["🪵","🔧","🎨","⚡","🚿","📦","🏠","🪟","🚪","🛁","🪣","🔩","🪚","🧱","💡","🛒","🔌","🪜","🧰","🌿"];
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const fmt     = n => new Intl.NumberFormat("nl-NL",{style:"currency",currency:"EUR"}).format(n||0);
+const genId   = () => Math.random().toString(36).slice(2,9);
+const fmtDate = d => d ? d.slice(8)+" "+MONTHS[parseInt(d.slice(5,7))-1] : "";
+const netto   = b => (parseFloat(b.bedrag)||0)-(parseFloat(b.retour)||0);
+const statusColor = s => s==="actief"?"#1A6A3A":s==="deels retour"?"#7A5800":"#8B1A1A";
+const statusBg    = s => s==="actief"?"#E8F5ED":s==="deels retour"?"#FFF5D6":"#FDEAEA";
+const splitsToStr = sp => (sp||[]).map(s=>`${s.catId}:${s.pct}`).join("|");
+const strToSplits = str => str ? str.split("|").map(p=>{ const [c,p2]=p.split(":"); return {catId:c,pct:parseFloat(p2)||0}; }) : [];
+const driveImgUrl = url => { if(!url) return null; const m=url.match(/[?&]id=([^&]+)/)||url.match(/\/d\/([^/?&]+)/); return m?`https://lh3.googleusercontent.com/d/${m[1]}`:url; };
+const rowToObj = r => ({ id:r[0]||genId(), winkel:r[1]||"", locatie:r[2]||"", splits:strToSplits(r[3]), persoon:r[4]||"Max", datum:r[5]||"", bedrag:parseFloat(r[6])||0, retour:parseFloat(r[7])||0, status:r[8]||"actief", garantie:r[9]||"", notitie:r[10]||"", fotoUrl:r[11]||null, productFotoUrl:r[12]||null });
+const objToRow = b => [b.id,b.winkel,b.locatie,splitsToStr(b.splits),b.persoon,b.datum,b.bedrag||0,b.retour||0,b.status,b.garantie||"",b.notitie||"",b.fotoUrl||"",b.productFotoUrl||""];
+
+// ─── GOOGLE AUTH ──────────────────────────────────────────────────────────────
+let _token = null, _tokenExpiry = 0, _tokenClient = null;
+
+function getToken(forceConsent=false) {
+  if (_token && Date.now() < _tokenExpiry - 300000) return Promise.resolve(_token);
+  return new Promise((resolve, reject) => {
+    const init = () => {
+      _tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID, scope: SCOPES,
+        callback: r => {
+          if (r.error) return reject(r.error);
+          _token = r.access_token;
+          _tokenExpiry = Date.now() + (r.expires_in||3600)*1000;
+          resolve(_token);
+        },
+      });
+      _tokenClient.requestAccessToken({ prompt: forceConsent?"consent":"" });
+    };
+    if (window.google?.accounts) init();
+    else { const t = setInterval(()=>{ if(window.google?.accounts){ clearInterval(t); init(); } },100); }
+  });
+}
+
+async function authFetch(url, opts={}) {
+  const token = await getToken();
+  const res = await fetch(url, { ...opts, headers:{ Authorization:`Bearer ${token}`, ...(opts.headers||{}) } });
+  if (res.status===401) { _token=null; return authFetch(url,opts); }
+  return res;
+}
+async function apiJson(url, opts={}) {
+  return (await authFetch(url, { ...opts, headers:{ "Content-Type":"application/json", ...(opts.headers||{}) } })).json();
+}
+
+// ─── SHEETS ───────────────────────────────────────────────────────────────────
+async function ensureTab(name, headers) {
+  const meta = await apiJson(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}`);
+  if (!meta.sheets?.some(s=>s.properties.title===name)) {
+    await apiJson(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}:batchUpdate`,
+      { method:"POST", body:JSON.stringify({ requests:[{ addSheet:{ properties:{ title:name } } }] }) });
+  }
+  const check = await apiJson(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(name)}!A1`);
+  if (!check.values) {
+    await apiJson(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(name)}!A1?valueInputOption=RAW`,
+      { method:"PUT", body:JSON.stringify({ values:[headers] }) });
+  }
+}
+
+async function loadSheet() {
+  await ensureTab(SHEET_NAME, SHEET_HDR);
+  const d = await apiJson(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}!A2:M`);
+  return (d.values||[]).filter(r=>r[0]).map(rowToObj);
+}
+
+async function appendRow(row) {
+  await apiJson(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}!A:M:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+    { method:"POST", body:JSON.stringify({ values:[row] }) });
+}
+
+async function updateRow(b) {
+  const d = await apiJson(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}!A:A`);
+  const idx = (d.values||[]).findIndex(r=>r[0]===b.id);
+  if (idx<1) return appendRow(objToRow(b));
+  await apiJson(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}!A${idx+1}:M${idx+1}?valueInputOption=RAW`,
+    { method:"PUT", body:JSON.stringify({ values:[objToRow(b)] }) });
+}
+
+async function deleteRow(id) {
+  const [col, meta] = await Promise.all([
+    apiJson(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}!A:A`),
+    apiJson(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}`)
+  ]);
+  const idx = (col.values||[]).findIndex(r=>r[0]===id);
+  if (idx<1) return;
+  const sid = meta.sheets?.find(s=>s.properties.title===SHEET_NAME)?.properties?.sheetId||0;
+  await apiJson(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}:batchUpdate`,
+    { method:"POST", body:JSON.stringify({ requests:[{ deleteDimension:{ range:{ sheetId:sid, dimension:"ROWS", startIndex:idx, endIndex:idx+1 } } }] }) });
+}
+
+async function loadSettings() {
+  await ensureTab(SET_NAME, ["Sleutel","Waarde"]);
+  const d = await apiJson(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(SET_NAME)}!A2:B`);
+  const map = Object.fromEntries((d.values||[]).map(r=>[r[0],r[1]]));
+  return {
+    categories: map.categories ? JSON.parse(map.categories) : DEFAULT_CATS,
+    budgets:    map.budgets    ? JSON.parse(map.budgets)    : DEFAULT_BUDGETS,
+  };
+}
+
+async function saveSettings(cats, budgets) {
+  await apiJson(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(SET_NAME)}!A2:B3?valueInputOption=RAW`,
+    { method:"PUT", body:JSON.stringify({ values:[["categories",JSON.stringify(cats)],["budgets",JSON.stringify(budgets)]] }) });
+}
+
+// ─── DRIVE ────────────────────────────────────────────────────────────────────
+async function uploadDrive(base64, filename) {
+  const token   = await getToken();
+  const b64     = base64.includes(",") ? base64.split(",")[1] : base64;
+  const mime    = base64.startsWith("data:") ? base64.split(";")[0].split(":")[1] : "image/jpeg";
+  const bytes   = Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
+  const form    = new FormData();
+  form.append("metadata", new Blob([JSON.stringify({ name:filename, parents:[FOLDER_ID] })],{type:"application/json"}));
+  form.append("file", new Blob([bytes],{type:mime}));
+  const res  = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",
+    { method:"POST", headers:{ Authorization:`Bearer ${token}` }, body:form });
+  const file = await res.json();
+  if (!file.id) throw new Error("Upload mislukt");
+  await authFetch(`https://www.googleapis.com/drive/v3/files/${file.id}/permissions`,
+    { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ role:"reader", type:"anyone" }) });
+  return `https://drive.google.com/uc?id=${file.id}`;
+}
+
+// ─── AI ───────────────────────────────────────────────────────────────────────
+async function analyseReceipt(base64, categories) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({
+      model:"claude-sonnet-4-20250514", max_tokens:1000,
+      messages:[{ role:"user", content:[
+        { type:"image", source:{ type:"base64", media_type:"image/jpeg", data: base64.includes(",") ? base64.split(",")[1] : base64 } },
+        { type:"text", text:`Analyseer dit kassabon. Geef ALLEEN JSON terug, geen markdown.
+Beschikbare categorieën: ${categories.map(c=>c.label).join(", ")}.
+Formaat: {"winkel":"naam","bedrag":12.34,"datum":"YYYY-MM-DD","splits":[{"catLabel":"Materiaal","pct":100}],"notitie":"omschrijving"}
+splits moet optellen tot 100. Gebruik null voor onbekende velden.` }
+      ]}]
+    })
+  });
+  const d = await res.json();
+  return JSON.parse(d.content?.map(c=>c.text||"").join("").replace(/```json|```/g,"").trim());
+}
+
+// ─── MINI FRAMEWORK ───────────────────────────────────────────────────────────
+// Simple reactive state + DOM rendering without React dependency
+let _state = {};
+let _rendering = false;
+
+function setState(updates) {
+  _state = { ..._state, ...(typeof updates === "function" ? updates(_state) : updates) };
+  if (!_rendering) { _rendering = true; requestAnimationFrame(() => { render(); _rendering = false; }); }
+}
+
+function h(tag, attrs={}, ...children) {
+  const el = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs)) {
+    if (k==="style" && typeof v==="object") Object.assign(el.style, v);
+    else if (k.startsWith("on") && typeof v==="function") el.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (k==="className") el.className=v;
+    else if (k==="value" && (tag==="input"||tag==="select"||tag==="textarea")) el.value=v||"";
+    else if (k==="checked") el.checked=v;
+    else if (k==="disabled") el.disabled=v;
+    else if (k==="placeholder") el.placeholder=v;
+    else if (k==="type") el.type=v;
+    else if (k==="accept") el.accept=v;
+    else if (k==="min") el.min=v;
+    else if (k==="max") el.max=v;
+    else if (k==="step") el.step=v;
+    else if (k==="rows") el.rows=v;
+    else if (k==="src") el.src=v;
+    else if (k==="alt") el.alt=v;
+    else el.setAttribute(k, v);
+  }
+  for (const child of children.flat()) {
+    if (child==null||child===false) continue;
+    el.appendChild(typeof child==="string" ? document.createTextNode(child) : child);
+  }
+  return el;
+}
+
+// ─── STYLES ───────────────────────────────────────────────────────────────────
+const S = {
+  card:    { background:"#FDFAF7", border:"1px solid #DDD5C8", borderRadius:"6px", padding:"18px" },
+  inp:     { width:"100%", padding:"8px 11px", borderRadius:"4px", border:"1px solid #D5CCC0", background:"#FDFAF7", fontSize:"13px", color:"#2A2420" },
+  lbl:     { fontSize:"10px", letterSpacing:"1.5px", color:"#8A7A68", textTransform:"uppercase", marginBottom:"4px", display:"block", fontFamily:"'DM Mono'" },
+  tabBtn:  a => ({ padding:"8px 18px", borderRadius:"4px", fontSize:"12px", border: a?"1px solid #A89078":"1px solid transparent", background: a?"#FAF5EE":"transparent", color: a?"#2A2420":"#8A7A68", fontFamily:"'DM Mono'" }),
+  fBtn:    a => ({ padding:"5px 14px", borderRadius:"3px", fontSize:"11px", border:`1px solid ${a?"#8B6A3A":"#D5CCC0"}`, background: a?"#F0E8D8":"transparent", color: a?"#5A3E28":"#8A7A68", fontFamily:"'DM Mono'" }),
+  saveBtn: d => ({ padding:"10px 22px", background: d?"#B8A898":"#5A3E28", color:"#FAF5EE", border:"none", borderRadius:"4px", fontSize:"13px", fontFamily:"'DM Mono'", cursor: d?"default":"pointer" }),
+  cancelBtn: { padding:"10px 18px", background:"transparent", color:"#8A7A68", border:"1px solid #D5CCC0", borderRadius:"4px", fontSize:"13px", fontFamily:"'DM Mono'" },
+};
+
+function badge(text, color, bg) {
+  return h("span", { style:{ display:"inline-block", padding:"2px 8px", borderRadius:"3px", fontSize:"10px", fontFamily:"'DM Mono'", letterSpacing:"0.5px", color, background:bg, fontWeight:"500", marginRight:"3px" } }, text);
+}
+
+function bar(value, max, color) {
+  const pct = max>0 ? Math.min((value/max)*100,100) : 0;
+  const over = max>0 && value>max;
+  return h("div", { style:{ background:"#E8E0D5", borderRadius:"3px", height:"6px", overflow:"hidden" } },
+    h("div", { style:{ width:`${pct}%`, height:"100%", borderRadius:"3px", background: over?"#C0392B":color, transition:"width 0.3s" } }));
+}
+
+function splitBadges(splits, categories) {
+  const wrap = h("span", { style:{ display:"inline-flex", gap:"4px", flexWrap:"wrap" } });
+  for (const s of (splits||[])) {
+    const cat = categories.find(c=>c.id===s.catId);
+    wrap.appendChild(badge(`${cat?.emoji||"📦"} ${cat?.label||s.catId}${splits.length>1?` ${s.pct}%`:""}`, cat?.color||"#888", (cat?.color||"#888")+"18"));
+  }
+  return wrap;
+}
+
+// ─── PHOTO THUMB ──────────────────────────────────────────────────────────────
+function photoThumb({ url, label, size=52, loading, onAdd }) {
+  const wrap = h("div", {});
+  if (label) wrap.appendChild(h("div", { style:{ fontSize:"10px", color:"#8A7A68", marginBottom:"3px", letterSpacing:"1px", fontFamily:"'DM Mono'" } }, label));
+
+  const inp = h("input", { type:"file", accept:"image/*", style:{ display:"none" } });
+  inp.addEventListener("change", e => {
+    const f = e.target.files[0]; if(!f) return;
+    const r = new FileReader(); r.onload = ev => onAdd(ev.target.result); r.readAsDataURL(f);
+  });
+
+  const displayUrl = driveImgUrl(url);
+  if (loading) {
+    wrap.appendChild(h("div", { style:{ width:size+"px", height:size+"px", borderRadius:"4px", border:"1px solid #D5CCC0", background:"#F5F0EB", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"11px", color:"#8A7A68" } }, "⏳"));
+  } else if (displayUrl) {
+    const img = h("img", { src:displayUrl, alt:label||"", style:{ width:size+"px", height:size+"px", objectFit:"cover", borderRadius:"4px", border:"1px solid #D5CCC0", cursor:"pointer" } });
+    img.addEventListener("click", () => window.open(url));
+    img.addEventListener("error", () => { img.style.display="none"; plusBtn.style.display="flex"; });
+    wrap.appendChild(img);
+  }
+
+  const plusBtn = h("div", { style:{ width:size+"px", height:size+"px", borderRadius:"4px", border:"2px dashed #C8BEB2", display: displayUrl&&!loading?"none":"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:"#B8AEA5", fontSize:"20px", background:"#F5F0EB" } }, "+");
+  plusBtn.addEventListener("click", () => inp.click());
+  wrap.appendChild(plusBtn);
+  wrap.appendChild(inp);
+  return wrap;
+}
+
+// ─── SPLITS EDITOR ────────────────────────────────────────────────────────────
+function splitsEditor(splits, categories, onChange) {
+  const total = splits.reduce((s,x)=>s+(x.pct||0),0);
+  const ok = Math.abs(100-total)<0.5;
+  const wrap = h("div", {});
+
+  for (let i=0; i<splits.length; i++) {
+    const s = splits[i];
+    const safeCatId = categories.find(c=>c.id===s.catId) ? s.catId : categories[0]?.id;
+    const row = h("div", { style:{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"6px" } });
+
+    const sel = h("select", { style:{ flex:"1", padding:"6px 8px", borderRadius:"4px", border:"1px solid #D5CCC0", fontSize:"12px", background:"#FDFAF7" } });
+    for (const c of categories) {
+      const opt = h("option", { value:c.id }, `${c.emoji} ${c.label}`);
+      if (c.id===safeCatId) opt.selected=true;
+      sel.appendChild(opt);
+    }
+    sel.addEventListener("change", e => { const ns=[...splits]; ns[i]={...ns[i],catId:e.target.value}; onChange(ns); });
+
+    const pctInp = h("input", { type:"number", min:"0", max:"100", value:String(s.pct), style:{ width:"58px", padding:"6px 8px", borderRadius:"4px", border:"1px solid #D5CCC0", fontSize:"12px", textAlign:"right", background:"#FDFAF7" } });
+    pctInp.addEventListener("change", e => { const ns=[...splits]; ns[i]={...ns[i],pct:parseFloat(e.target.value)||0}; onChange(ns); });
+
+    row.appendChild(sel);
+    row.appendChild(pctInp);
+    row.appendChild(h("span", { style:{ fontSize:"12px", color:"#8A7A68" } }, "%"));
+    if (splits.length>1) {
+      const rm = h("button", { style:{ padding:"4px 8px", background:"#FDEAEA", border:"1px solid #E0C0C0", borderRadius:"3px", color:"#8B1A1A", fontSize:"12px" } }, "×");
+      rm.addEventListener("click", () => onChange(splits.filter((_,idx)=>idx!==i)));
+      row.appendChild(rm);
+    }
+    wrap.appendChild(row);
+  }
+
+  const footer = h("div", { style:{ display:"flex", justifyContent:"space-between", marginTop:"8px" } });
+  const addBtn = h("button", { style:{ fontSize:"11px", fontFamily:"'DM Mono'", color:"#5A3E28", background:"transparent", border:"1px solid #D5CCC0", borderRadius:"3px", padding:"4px 10px" } }, "+ Nog een categorie");
+  addBtn.addEventListener("click", () => onChange([...splits, { catId:categories[0]?.id, pct:Math.max(0,100-total) }]));
+  const pctLabel = h("span", { style:{ fontSize:"11px", fontFamily:"'DM Mono'", color:ok?"#1A6A3A":"#C0392B" } }, ok?"✓ 100%":`${total.toFixed(0)}% — moet 100% zijn`);
+  footer.appendChild(addBtn);
+  footer.appendChild(pctLabel);
+  wrap.appendChild(footer);
+  return wrap;
+}
+
+// ─── SYNC MESSAGE ─────────────────────────────────────────────────────────────
+let _syncTimeout = null;
+function setSyncMsg(text, type="busy") {
+  setState({ syncMsg:{ text, type } });
+  if (_syncTimeout) clearTimeout(_syncTimeout);
+  if (type!=="busy") _syncTimeout = setTimeout(()=>setState({syncMsg:null}), 3500);
+}
+
+// ─── MAIN STATE ───────────────────────────────────────────────────────────────
+_state = {
+  authState: "idle",   // idle | loading | ready | error
+  bonnetjes: [],
+  categories: DEFAULT_CATS,
+  budgets: DEFAULT_BUDGETS,
+  tab: 0,
+  filter: "Alles",
+  filterCat: "Alles",
+  filterWinkel: "",
+  showForm: false,
+  editItem: null,
+  expandedId: null,
+  showBudget: false,
+  showCatMgr: false,
+  isSaving: false,
+  syncMsg: null,
+  // Form state
+  form: null,
+  formAiMsg: null,
+  formUplFoto: false,
+  formUplProd: false,
+  formAiLoading: false,
+};
+
+// ─── ACTIONS ──────────────────────────────────────────────────────────────────
+function makeEmpty() {
+  return { winkel:"", locatie:"", splits:[{catId:_state.categories[0]?.id||"overig",pct:100}], persoon:"Max", datum:new Date().toISOString().slice(0,10), bedrag:"", retour:"", garantie:"", notitie:"", status:"actief", fotoUrl:null, productFotoUrl:null };
+}
+
+async function doLogin() {
+  setState({ authState:"loading" });
+  try {
+    await getToken(true);
+    setState({ authState:"ready" });
+    await doLoadAll();
+  } catch(e) { setState({ authState:"error" }); }
+}
+
+async function doLoadAll() {
+  setSyncMsg("⏳ Laden…");
+  try {
+    const [rows, settings] = await Promise.all([loadSheet(), loadSettings()]);
+    setState({ bonnetjes:rows, categories:settings.categories, budgets:settings.budgets });
+    setSyncMsg(`✓ ${rows.length} bonnetje${rows.length!==1?"s":""} geladen`, "ok");
+  } catch(e) { setSyncMsg("⚠ Laden mislukt", "err"); }
+}
+
+async function doSave() {
+  const { form, editItem, bonnetjes } = _state;
+  if (!form.winkel || !form.bedrag) return;
+  const splitsTotal = form.splits.reduce((s,x)=>s+(x.pct||0),0);
+  if (Math.abs(splitsTotal-100)>0.5) return;
+  setState({ isSaving:true }); setSyncMsg("⏳ Opslaan…");
+  try {
+    if (editItem) {
+      const updated = { ...form, id:editItem.id };
+      await updateRow(updated);
+      setState({ bonnetjes:bonnetjes.map(b=>b.id===editItem.id?updated:b), editItem:null, showForm:false });
+    } else {
+      const nieuw = { ...form, id:genId() };
+      await appendRow(objToRow(nieuw));
+      setState({ bonnetjes:[nieuw,...bonnetjes], showForm:false });
+    }
+    setSyncMsg("✓ Opgeslagen", "ok");
+  } catch(e) { setSyncMsg("⚠ Opslaan mislukt — "+e.message, "err"); }
+  finally { setState({ isSaving:false }); }
+}
+
+async function doDelete(id) {
+  if (!confirm("Bonnetje verwijderen?")) return;
+  setSyncMsg("⏳ Verwijderen…");
+  try {
+    await deleteRow(id);
+    setState({ bonnetjes:_state.bonnetjes.filter(b=>b.id!==id), expandedId:null });
+    setSyncMsg("✓ Verwijderd", "ok");
+  } catch { setSyncMsg("⚠ Verwijderen mislukt", "err"); }
+}
+
+async function doSaveCats(cats) {
+  setState({ categories:cats, showCatMgr:false });
+  try { await saveSettings(cats, _state.budgets); setSyncMsg("✓ Categorieën opgeslagen", "ok"); }
+  catch { setSyncMsg("⚠ Opslaan mislukt", "err"); }
+}
+
+async function doSaveBudgets(bdg) {
+  setState({ budgets:bdg, showBudget:false });
+  try { await saveSettings(_state.categories, bdg); setSyncMsg("✓ Budgetten opgeslagen", "ok"); }
+  catch { setSyncMsg("⚠ Opslaan mislukt", "err"); }
+}
+
+async function doReceiptPhoto(base64) {
+  setState({ formUplFoto:true, formAiLoading:true, formAiMsg:null });
+  try {
+    const driveUrl = await uploadDrive(base64, `bonnetje-${genId()}.jpg`);
+    setState(s => ({ form:{ ...s.form, fotoUrl:driveUrl } }));
+    try {
+      const result = await analyseReceipt(base64, _state.categories);
+      setState(s => ({
+        form: { ...s.form, fotoUrl:driveUrl,
+          winkel:  result.winkel  || s.form.winkel,
+          bedrag:  result.bedrag  != null ? result.bedrag : s.form.bedrag,
+          datum:   result.datum   || s.form.datum,
+          notitie: result.notitie || s.form.notitie,
+          splits:  result.splits?.length
+            ? result.splits.map(sp=>{ const cat=_state.categories.find(c=>c.label.toLowerCase()===sp.catLabel?.toLowerCase())||_state.categories[0]; return {catId:cat.id,pct:sp.pct}; })
+            : s.form.splits,
+        },
+        formAiMsg: { ok:true, text:"✓ Gegevens ingevuld door AI — controleer hieronder" }
+      }));
+    } catch { setState({ formAiMsg:{ ok:false, text:"Foto opgeslagen ✓ maar AI-herkenning mislukt." } }); }
+  } catch { setState({ formAiMsg:{ ok:false, text:"Upload mislukt. Controleer je verbinding." } }); }
+  finally { setState({ formUplFoto:false, formAiLoading:false }); }
+}
+
+async function doProdPhoto(base64) {
+  setState({ formUplProd:true });
+  try {
+    const url = await uploadDrive(base64, `product-${genId()}.jpg`);
+    setState(s => ({ form:{ ...s.form, productFotoUrl:url } }));
+  } catch { setState({ formAiMsg:{ ok:false, text:"Productfoto uploaden mislukt." } }); }
+  finally { setState({ formUplProd:false }); }
+}
+
+function exportCSV() {
+  const { bonnetjes, categories } = _state;
+  const hdr  = ["Winkel","Locatie","Categorieën","Persoon","Datum","Bedrag","Retour","Netto","Status","Garantie","Notitie"];
+  const rows = bonnetjes.map(b=>[b.winkel,b.locatie,(b.splits||[]).map(s=>{const c=categories.find(x=>x.id===s.catId);return `${c?.label||s.catId} ${s.pct}%`;}).join("+"),b.persoon,b.datum,b.bedrag,b.retour||0,netto(b).toFixed(2),b.status,b.garantie||"",b.notitie||""]);
+  const csv  = [hdr,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a = document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"})); a.download="bonnetjes.csv"; a.click();
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function render() {
+  const root = document.getElementById("root");
+  root.innerHTML = "";
+  root.appendChild(buildApp());
+}
+
+function buildApp() {
+  const { authState } = _state;
+  if (authState==="idle"||authState==="error") return buildLogin();
+  if (authState==="loading") return buildLoading();
+  return buildMain();
+}
+
+function buildLogin() {
+  const { authState } = _state;
+  const wrap = h("div", { style:{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#F2EBE0" } });
+  const box  = h("div", { style:{ background:"#FDFAF7", border:"1px solid #DDD5C8", borderRadius:"8px", padding:"40px", textAlign:"center", maxWidth:"360px", width:"90%" } });
+  box.appendChild(h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"44px", letterSpacing:"3px", color:"#2A1E14", lineHeight:"1" } }, "BONNETJES"));
+  box.appendChild(h("div", { style:{ fontFamily:"'DM Mono'", fontSize:"11px", color:"#8A7A68", letterSpacing:"1.5px", marginBottom:"28px" } }, "MAX & MERIJN — VERBOUWING 2026"));
+  if (authState==="error") box.appendChild(h("div", { style:{ marginBottom:"16px", padding:"8px 12px", background:"#FDEAEA", borderRadius:"4px", fontFamily:"'DM Mono'", fontSize:"12px", color:"#8B1A1A" } }, "Inloggen mislukt. Probeer opnieuw."));
+  const btn = h("button", { style:{ width:"100%", padding:"12px 28px", background:"#5A3E28", color:"#FAF5EE", border:"none", borderRadius:"6px", fontSize:"14px", fontFamily:"'DM Mono'", marginBottom:"10px" } }, "🔑 Inloggen met Google");
+  btn.addEventListener("click", doLogin);
+  box.appendChild(btn);
+  box.appendChild(h("div", { style:{ fontFamily:"'DM Mono'", fontSize:"11px", color:"#A89878" } }, "Data gesynchroniseerd via Google Sheets & Drive"));
+  wrap.appendChild(box);
+  return wrap;
+}
+
+function buildLoading() {
+  const wrap = h("div", { style:{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#F2EBE0" } });
+  wrap.appendChild(h("div", { style:{ textAlign:"center" } },
+    h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"32px", color:"#5A3E28", letterSpacing:"2px" } }, "VERBINDING MAKEN…"),
+    h("div", { style:{ fontFamily:"'DM Mono'", fontSize:"12px", color:"#8A7A68", marginTop:"8px" } }, "Even geduld")
+  ));
+  return wrap;
+}
+
+function buildMain() {
+  const { tab, syncMsg, bonnetjes } = _state;
+  const TABS = ["📋 Bonnetjes","📊 Overzicht","⚖️ Afrekenen","📅 Tijdlijn"];
+  const totaalNetto = bonnetjes.reduce((s,b)=>s+netto(b),0);
+
+  const wrap = h("div", { style:{ minHeight:"100vh", paddingBottom:"60px" } });
+
+  // Header
+  const hdr = h("div", { style:{ background:"#FAF5EE", borderBottom:"1px solid #DDD5C8", padding:"20px 24px 16px" } });
+  const hdrTop = h("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"14px" } });
+  hdrTop.appendChild(h("div", {},
+    h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"38px", letterSpacing:"3px", color:"#2A1E14", lineHeight:"1" } }, "BONNETJES"),
+    h("div", { style:{ fontFamily:"'DM Mono'", fontSize:"11px", color:"#8A7A68", letterSpacing:"1.5px" } }, "MAX & MERIJN — VERBOUWING 2026")
+  ));
+  const totaalBox = h("div", { style:{ textAlign:"right" } });
+  totaalBox.appendChild(h("div", { style:{ fontSize:"10px", letterSpacing:"1.5px", color:"#8A7A68", fontFamily:"'DM Mono'", textTransform:"uppercase" } }, "Netto totaal"));
+  totaalBox.appendChild(h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"34px", color:"#2A1E14", letterSpacing:"1px" } }, fmt(totaalNetto)));
+  totaalBox.appendChild(h("div", { style:{ fontFamily:"'DM Mono'", fontSize:"10px", color:"#A89878" } }, `${bonnetjes.length} bonnetje${bonnetjes.length!==1?"s":""}`));
+  hdrTop.appendChild(totaalBox);
+  hdr.appendChild(hdrTop);
+
+  // Tab bar
+  const tabBar = h("div", { style:{ display:"flex", gap:"6px", flexWrap:"wrap", alignItems:"center" } });
+  for (let i=0;i<TABS.length;i++) {
+    const btn = h("button", { style:S.tabBtn(tab===i) }, TABS[i]);
+    const idx = i;
+    btn.addEventListener("click", ()=>setState({ tab:idx }));
+    tabBar.appendChild(btn);
+  }
+  tabBar.appendChild(h("div", { style:{ flex:"1" } }));
+  if (syncMsg) {
+    const col = syncMsg.type==="ok"?"#1A6A3A":syncMsg.type==="err"?"#8B1A1A":"#5A3E28";
+    tabBar.appendChild(h("span", { style:{ fontFamily:"'DM Mono'", fontSize:"11px", color:col } }, syncMsg.text));
+  }
+  const csvBtn = h("button", { style:{ padding:"7px 16px", background:"#5A3E28", color:"#FAF5EE", border:"none", borderRadius:"4px", fontFamily:"'DM Mono'", fontSize:"11px" } }, "↓ CSV");
+  csvBtn.addEventListener("click", exportCSV);
+  tabBar.appendChild(csvBtn);
+  hdr.appendChild(tabBar);
+  wrap.appendChild(hdr);
+
+  // Content
+  const content = h("div", { style:{ padding:"24px" } });
+  if (tab===0) content.appendChild(buildBonnetjes());
+  if (tab===1) content.appendChild(buildOverzicht());
+  if (tab===2) content.appendChild(buildAfrekenen());
+  if (tab===3) content.appendChild(buildTijdlijn());
+  wrap.appendChild(content);
+
+  // Modals
+  if (_state.showBudget)  wrap.appendChild(buildBudgetModal());
+  if (_state.showCatMgr)  wrap.appendChild(buildCatModal());
+
+  return wrap;
+}
+
+// ─── TAB: BONNETJES ───────────────────────────────────────────────────────────
+function buildBonnetjes() {
+  const { bonnetjes, categories, filter, filterCat, filterWinkel, showForm, editItem, expandedId, isSaving, form, formAiMsg, formUplFoto, formUplProd, formAiLoading } = _state;
+  const wrap = h("div", {});
+  const winkels = [...new Set(bonnetjes.map(b=>b.winkel).filter(Boolean))].sort();
+
+  // Filters
+  const filterRow = h("div", { style:{ display:"flex", gap:"8px", flexWrap:"wrap", marginBottom:"16px", alignItems:"center" } });
+  for (const p of ["Alles",...PERSONS]) {
+    const btn = h("button", { style:S.fBtn(filter===p) }, p);
+    btn.addEventListener("click", ()=>setState({ filter:p }));
+    filterRow.appendChild(btn);
+  }
+  filterRow.appendChild(h("span", { style:{ width:"8px" } }));
+
+  const catSel = h("select", { style:{ padding:"5px 10px", borderRadius:"3px", border:"1px solid #D5CCC0", fontSize:"11px", background:"#F5F0EB", fontFamily:"'DM Mono'" } });
+  catSel.appendChild(h("option", { value:"Alles" }, "Alle categorieën"));
+  for (const c of categories) catSel.appendChild(h("option", { value:c.id }, `${c.emoji} ${c.label}`));
+  catSel.value = filterCat;
+  catSel.addEventListener("change", e=>setState({ filterCat:e.target.value }));
+  filterRow.appendChild(catSel);
+
+  const winkelSel = h("select", { style:{ padding:"5px 10px", borderRadius:"3px", border:"1px solid #D5CCC0", fontSize:"11px", background:"#F5F0EB", fontFamily:"'DM Mono'" } });
+  winkelSel.appendChild(h("option", { value:"" }, "Alle winkels"));
+  for (const w of winkels) winkelSel.appendChild(h("option", { value:w }, w));
+  winkelSel.value = filterWinkel;
+  winkelSel.addEventListener("change", e=>setState({ filterWinkel:e.target.value }));
+  filterRow.appendChild(winkelSel);
+
+  const refBtn = h("button", { style:{ padding:"5px 12px", background:"transparent", border:"1px solid #D5CCC0", borderRadius:"3px", fontFamily:"'DM Mono'", fontSize:"11px", color:"#5A4A38" } }, "↻ Vernieuwen");
+  refBtn.addEventListener("click", doLoadAll);
+  filterRow.appendChild(refBtn);
+  wrap.appendChild(filterRow);
+
+  // Form (new)
+  if (showForm && !editItem) wrap.appendChild(buildForm(form, false, isSaving, formAiMsg, formUplFoto, formUplProd, formAiLoading));
+
+  // List
+  const filtered = bonnetjes.filter(b=>{
+    if(filter!=="Alles"&&b.persoon!==filter) return false;
+    if(filterCat!=="Alles"&&!(b.splits||[]).find(s=>s.catId===filterCat)) return false;
+    if(filterWinkel&&b.winkel!==filterWinkel) return false;
+    return true;
+  }).sort((a,b)=>b.datum.localeCompare(a.datum));
+
+  if (filtered.length===0 && bonnetjes.length===0) {
+    wrap.appendChild(h("div", { style:{ textAlign:"center", padding:"48px", color:"#8A7A68" } },
+      h("div", { style:{ fontSize:"32px", marginBottom:"12px" } }, "🧾"),
+      h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"22px", letterSpacing:"2px", color:"#5A3E28", marginBottom:"6px" } }, "Nog geen bonnetjes"),
+      h("div", { style:{ fontFamily:"'DM Mono'", fontSize:"12px" } }, "Klik hieronder om het eerste bonnetje toe te voegen.")
+    ));
+  } else if (filtered.length===0) {
+    wrap.appendChild(h("div", { style:{ textAlign:"center", padding:"32px", color:"#A89878", fontFamily:"'DM Mono'", fontSize:"13px" } }, "Geen bonnetjes voor dit filter."));
+  }
+
+  for (const b of filtered) {
+    const isExp  = expandedId===b.id;
+    const isEdit = editItem?.id===b.id;
+    const mainCat = categories.find(c=>c.id===b.splits?.[0]?.catId);
+
+    const card = h("div", { style:{ ...S.card, borderLeft:`4px solid ${mainCat?.color||"#ccc"}`, marginBottom:"8px" } });
+
+    if (isEdit) {
+      card.appendChild(buildForm(form, true, isSaving, formAiMsg, formUplFoto, formUplProd, formAiLoading));
+    } else {
+      // Row
+      const row = h("div", { style:{ display:"flex", alignItems:"center", gap:"12px", cursor:"pointer" } });
+      row.addEventListener("click", ()=>setState({ expandedId: isExp?null:b.id }));
+
+      // Thumbnails
+      const thumbs = h("div", { style:{ display:"flex", gap:"4px" } });
+      for (let i=0;i<2;i++) {
+        const url = i===0 ? b.fotoUrl : b.productFotoUrl;
+        const displayUrl = driveImgUrl(url);
+        const box = h("div", { style:{ width:"40px", height:"40px", borderRadius:"3px", border:"1px solid #D5CCC0", background:"#F0EAE2", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"16px", overflow:"hidden", flexShrink:"0" } });
+        if (displayUrl) {
+          const img = h("img", { src:displayUrl, alt:"", style:{ width:"100%", height:"100%", objectFit:"cover" } });
+          img.addEventListener("error", ()=>img.style.display="none");
+          box.appendChild(img);
+        } else {
+          box.appendChild(document.createTextNode(i===0?"🧾":"📦"));
+        }
+        thumbs.appendChild(box);
+      }
+      row.appendChild(thumbs);
+
+      // Info
+      const info = h("div", { style:{ flex:"1", minWidth:"0" } });
+      const nameLine = h("div", { style:{ display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap" } });
+      nameLine.appendChild(h("span", { style:{ fontWeight:"500", fontSize:"14px", color:"#1A1410" } }, b.winkel));
+      if (b.locatie) nameLine.appendChild(h("span", { style:{ fontSize:"11px", color:"#A89878", fontFamily:"'DM Mono'" } }, `📍 ${b.locatie}`));
+      info.appendChild(nameLine);
+
+      const tagLine = h("div", { style:{ display:"flex", gap:"6px", marginTop:"4px", flexWrap:"wrap", alignItems:"center" } });
+      tagLine.appendChild(splitBadges(b.splits, categories));
+      tagLine.appendChild(badge(b.status, statusColor(b.status), statusBg(b.status)));
+      tagLine.appendChild(h("span", { style:{ fontSize:"11px", color:"#A89878", fontFamily:"'DM Mono'" } }, `${b.persoon} · ${fmtDate(b.datum)}`));
+      if (b.garantie) tagLine.appendChild(h("span", { style:{ fontSize:"10px", color:"#1A6A3A", fontFamily:"'DM Mono'", background:"#E8F5ED", borderRadius:"2px", padding:"1px 6px" } }, `garantie t/m ${fmtDate(b.garantie)}`));
+      info.appendChild(tagLine);
+      row.appendChild(info);
+
+      // Amount
+      const amt = h("div", { style:{ textAlign:"right", flexShrink:"0" } });
+      amt.appendChild(h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"22px", color:"#1A1410", letterSpacing:"1px" } }, fmt(netto(b))));
+      if (parseFloat(b.retour)>0) amt.appendChild(h("div", { style:{ fontSize:"10px", color:"#A89878", fontFamily:"'DM Mono'" } }, `${fmt(b.bedrag)} − ${fmt(b.retour)}`));
+      row.appendChild(amt);
+      row.appendChild(h("span", { style:{ fontSize:"12px", color:"#C0B0A0" } }, isExp?"▲":"▼"));
+      card.appendChild(row);
+
+      // Expanded
+      if (isExp) {
+        const exp = h("div", { style:{ marginTop:"14px", paddingTop:"14px", borderTop:"1px solid #EAE2D8" } });
+        if (b.notitie) exp.appendChild(h("div", { style:{ marginBottom:"10px", padding:"8px 12px", background:"#F0EAE0", borderRadius:"4px", fontFamily:"'DM Mono'", fontSize:"12px", color:"#5A4A38" } }, `💬 ${b.notitie}`));
+        if ((b.splits||[]).length>1) {
+          const spBox = h("div", { style:{ marginBottom:"10px", padding:"8px 12px", background:"#F5F0EB", borderRadius:"4px" } });
+          spBox.appendChild(h("div", { style:{ fontSize:"10px", color:"#8A7A68", fontFamily:"'DM Mono'", letterSpacing:"1px", marginBottom:"6px" } }, "SPLITSING"));
+          for (const s of b.splits) {
+            const cat = categories.find(c=>c.id===s.catId);
+            const spRow = h("div", { style:{ display:"flex", justifyContent:"space-between", fontSize:"12px", fontFamily:"'DM Mono'", color:"#3A3028", marginBottom:"3px" } });
+            spRow.appendChild(h("span", {}, `${cat?.emoji} ${cat?.label} (${s.pct}%)`));
+            spRow.appendChild(h("span", {}, fmt(netto(b)*(s.pct/100))));
+            spBox.appendChild(spRow);
+          }
+          exp.appendChild(spBox);
+        }
+        const btns = h("div", { style:{ display:"flex", gap:"8px" } });
+        const editBtn = h("button", { style:{ padding:"6px 14px", background:"#F0E8DC", color:"#5A3E28", border:"1px solid #D5C5A8", borderRadius:"4px", fontFamily:"'DM Mono'", fontSize:"11px" } }, "✏ Bewerken");
+        editBtn.addEventListener("click", ()=>setState({ editItem:b, form:{...b}, showForm:false }));
+        const delBtn = h("button", { style:{ padding:"6px 14px", background:"#FDEAEA", color:"#8B1A1A", border:"1px solid #E0C0C0", borderRadius:"4px", fontFamily:"'DM Mono'", fontSize:"11px" } }, "🗑 Verwijderen");
+        delBtn.addEventListener("click", ()=>doDelete(b.id));
+        btns.appendChild(editBtn); btns.appendChild(delBtn);
+        exp.appendChild(btns);
+        card.appendChild(exp);
+      }
+    }
+    wrap.appendChild(card);
+  }
+
+  // Add button
+  if (!showForm && !editItem) {
+    const addBtn = h("div", { style:{ marginTop:"16px", width:"100%", padding:"16px", background:"transparent", border:"2px dashed #C8BEB2", borderRadius:"6px", color:"#8A7A68", fontFamily:"'DM Mono'", fontSize:"13px", textAlign:"center", cursor:"pointer" } }, "+ Nieuw bonnetje toevoegen");
+    addBtn.addEventListener("click", ()=>setState({ showForm:true, editItem:null, form:makeEmpty(), formAiMsg:null }));
+    wrap.appendChild(addBtn);
+  }
+
+  return wrap;
+}
+
+// ─── FORM ─────────────────────────────────────────────────────────────────────
+function buildForm(form, isEdit, isSaving, aiMsg, uplFoto, uplProd, aiLoading) {
+  const { categories } = _state;
+  const splitsTotal = (form.splits||[]).reduce((s,x)=>s+(x.pct||0),0);
+  const splitsOk = Math.abs(splitsTotal-100)<0.5;
+
+  const setForm = updates => setState(s=>({ form:{ ...s.form, ...updates } }));
+
+  const wrap = h("div", { style:{ background:"#FDFAF7", border:"1px solid #D5CCC0", borderRadius:"6px", padding:"20px", marginBottom:"16px" } });
+  wrap.appendChild(h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"20px", letterSpacing:"2px", color:"#2A2420", marginBottom:"16px" } }, isEdit?"✏ Bewerken":"+ Nieuw bonnetje"));
+
+  // Receipt photo
+  const fotoBox = h("div", { style:{ padding:"14px", background:"#F5F0EB", borderRadius:"6px", border:"1px solid #E8E0D5", marginBottom:"12px" } });
+  fotoBox.appendChild(h("div", { style:{ fontSize:"10px", letterSpacing:"1.5px", color:"#8A7A68", fontFamily:"'DM Mono'", marginBottom:"8px" } }, "📄 FOTO BONNETJE — Drive + AI herkenning"));
+  const fotoRow = h("div", { style:{ display:"flex", gap:"16px", alignItems:"flex-start" } });
+  fotoRow.appendChild(photoThumb({ url:form.fotoUrl, label:"", size:72, loading:uplFoto||aiLoading, onAdd: doReceiptPhoto }));
+  const fotoMsg = h("div", { style:{ flex:"1", fontFamily:"'DM Mono'", fontSize:"12px" } });
+  if (uplFoto||aiLoading) fotoMsg.appendChild(h("div", { style:{ color:"#5A3E28" } }, uplFoto?"⏳ Uploaden naar Drive…":"⏳ AI analyseert bonnetje…"));
+  else if (aiMsg) fotoMsg.appendChild(h("div", { style:{ color:aiMsg.ok?"#1A6A3A":"#C0392B" } }, aiMsg.text));
+  else fotoMsg.appendChild(h("div", { style:{ color:"#A89878" } }, "Upload een foto om automatisch in te vullen."));
+  fotoRow.appendChild(fotoMsg);
+  fotoBox.appendChild(fotoRow);
+  wrap.appendChild(fotoBox);
+
+  // Grid helpers
+  const grid2 = (...kids) => { const g=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px",marginBottom:"12px"}}); kids.forEach(k=>g.appendChild(k)); return g; };
+  const field = (lbl, el) => { const w=h("div",{}); w.appendChild(h("label",{style:S.lbl},lbl)); w.appendChild(el); return w; };
+
+  const winkelInp = h("input", { type:"text", value:form.winkel, placeholder:"bijv. Gamma", style:S.inp });
+  winkelInp.addEventListener("input", e=>setForm({ winkel:e.target.value }));
+  const locInp = h("input", { type:"text", value:form.locatie, placeholder:"bijv. Amsterdam", style:S.inp });
+  locInp.addEventListener("input", e=>setForm({ locatie:e.target.value }));
+  wrap.appendChild(grid2(field("Winkel", winkelInp), field("Locatie", locInp)));
+
+  // Splits
+  const splitsWrap = h("div", { style:{ marginBottom:"12px" } });
+  splitsWrap.appendChild(h("label", { style:S.lbl }, "Categorieën & verdeling"));
+  splitsWrap.appendChild(splitsEditor(form.splits, categories, v=>setForm({ splits:v })));
+  wrap.appendChild(splitsWrap);
+
+  const persoonSel = h("select", { style:S.inp });
+  PERSONS.forEach(p=>{ const o=h("option",{value:p},p); if(p===form.persoon)o.selected=true; persoonSel.appendChild(o); });
+  persoonSel.addEventListener("change", e=>setForm({ persoon:e.target.value }));
+
+  const statusSel = h("select", { style:S.inp });
+  STATUS_OPTIONS.forEach(s=>{ const o=h("option",{value:s},s); if(s===form.status)o.selected=true; statusSel.appendChild(o); });
+  statusSel.addEventListener("change", e=>setForm({ status:e.target.value }));
+  wrap.appendChild(grid2(field("Betaald door", persoonSel), field("Status", statusSel)));
+
+  const bedragInp = h("input", { type:"number", step:"0.01", value:String(form.bedrag||""), placeholder:"0,00", style:S.inp });
+  bedragInp.addEventListener("input", e=>setForm({ bedrag:e.target.value }));
+  const retourInp = h("input", { type:"number", step:"0.01", value:String(form.retour||""), placeholder:"0,00", style:S.inp });
+  retourInp.addEventListener("input", e=>setForm({ retour:e.target.value }));
+  wrap.appendChild(grid2(field("Bedrag (€)", bedragInp), field("Retour (€)", retourInp)));
+
+  const datumInp = h("input", { type:"date", value:form.datum, style:S.inp });
+  datumInp.addEventListener("change", e=>setForm({ datum:e.target.value }));
+  const garInp = h("input", { type:"date", value:form.garantie||"", style:S.inp });
+  garInp.addEventListener("change", e=>setForm({ garantie:e.target.value }));
+  wrap.appendChild(grid2(field("Datum", datumInp), field("Garantie tot", garInp)));
+
+  const notitie = h("textarea", { rows:"3", placeholder:"bijv. te veel gekocht…", style:{ ...S.inp, resize:"vertical" } }, form.notitie||"");
+  notitie.addEventListener("input", e=>setForm({ notitie:e.target.value }));
+  const notitieWrap = h("div", { style:{ marginBottom:"12px" } });
+  notitieWrap.appendChild(h("label", { style:S.lbl }, "Notitie"));
+  notitieWrap.appendChild(notitie);
+  wrap.appendChild(notitieWrap);
+
+  wrap.appendChild(photoThumb({ url:form.productFotoUrl, label:"📦 Foto product", size:64, loading:uplProd, onAdd:doProdPhoto }));
+
+  if (!splitsOk) wrap.appendChild(h("div", { style:{ marginTop:"10px", padding:"8px 12px", background:"#FFF5D6", border:"1px solid #E8D88A", borderRadius:"4px", fontFamily:"'DM Mono'", fontSize:"11px", color:"#7A5800" } }, "⚠ Categorieën moeten optellen tot 100%."));
+
+  const btnRow = h("div", { style:{ display:"flex", gap:"10px", marginTop:"14px" } });
+  const saveBtn = h("button", { style:S.saveBtn(isSaving||!splitsOk), disabled:isSaving||!splitsOk }, isSaving?"⏳ Opslaan…":"Opslaan");
+  saveBtn.addEventListener("click", doSave);
+  const cancelBtn = h("button", { style:S.cancelBtn }, "Annuleren");
+  cancelBtn.addEventListener("click", ()=>setState({ showForm:false, editItem:null, form:null }));
+  btnRow.appendChild(saveBtn); btnRow.appendChild(cancelBtn);
+  wrap.appendChild(btnRow);
+  return wrap;
+}
+
+// ─── TAB: OVERZICHT ───────────────────────────────────────────────────────────
+function buildOverzicht() {
+  const { bonnetjes, categories, budgets } = _state;
+  const totaalBruto  = bonnetjes.reduce((s,b)=>s+(parseFloat(b.bedrag)||0),0);
+  const totaalRetour = bonnetjes.reduce((s,b)=>s+(parseFloat(b.retour)||0),0);
+  const totaalNetto  = totaalBruto-totaalRetour;
+  const perPersoon   = PERSONS.reduce((acc,p)=>{ acc[p]=bonnetjes.filter(b=>b.persoon===p).reduce((s,b)=>s+netto(b),0); return acc; },{});
+  const perCat       = categories.reduce((acc,c)=>{ acc[c.id]=bonnetjes.reduce((s,b)=>{ const sp=(b.splits||[]).find(x=>x.catId===c.id); return s+(sp?netto(b)*(sp.pct/100):0); },0); return acc; },{});
+  const winkels      = [...new Set(bonnetjes.map(b=>b.winkel).filter(Boolean))].sort();
+
+  const wrap = h("div", { style:{ display:"flex", flexDirection:"column", gap:"16px" } });
+
+  // Totalen
+  const totGrid = h("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"12px" } });
+  for (const x of [{label:"Bruto uitgegeven",value:totaalBruto,color:"#1A1410"},{label:"Retour ontvangen",value:totaalRetour,color:"#1A6A3A"},{label:"Netto kosten",value:totaalNetto,color:"#5A3E28"}]) {
+    const c = h("div", { style:S.card });
+    c.appendChild(h("span", { style:S.lbl }, x.label));
+    c.appendChild(h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"24px", color:x.color, letterSpacing:"1px" } }, fmt(x.value)));
+    totGrid.appendChild(c);
+  }
+  wrap.appendChild(totGrid);
+
+  // Per persoon
+  const ppCard = h("div", { style:S.card });
+  ppCard.appendChild(h("span", { style:S.lbl }, "Per persoon (netto)"));
+  const ppGrid = h("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"16px", marginTop:"10px" } });
+  for (const p of PERSONS) {
+    const pct = totaalNetto>0?(perPersoon[p]/totaalNetto)*100:0;
+    const col = h("div", {});
+    const hdr = h("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:"5px" } });
+    hdr.appendChild(h("span", { style:{ fontWeight:"500", color:"#2A2420" } }, p));
+    hdr.appendChild(h("span", { style:{ fontFamily:"'Bebas Neue'", fontSize:"22px", color:"#5A3E28" } }, fmt(perPersoon[p])));
+    col.appendChild(hdr);
+    col.appendChild(bar(perPersoon[p], totaalNetto, "#8B6A3A"));
+    col.appendChild(h("div", { style:{ fontSize:"11px", color:"#A89878", fontFamily:"'DM Mono'", marginTop:"3px" } }, `${pct.toFixed(0)}%`));
+    ppGrid.appendChild(col);
+  }
+  ppCard.appendChild(ppGrid);
+  wrap.appendChild(ppCard);
+
+  // Per categorie
+  const catCard = h("div", { style:S.card });
+  const catHdr = h("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" } });
+  catHdr.appendChild(h("span", { style:S.lbl }, "Per categorie vs. budget"));
+  const catBtns = h("div", { style:{ display:"flex", gap:"8px" } });
+  const catBtn = h("button", { style:{ padding:"5px 12px", background:"transparent", border:"1px solid #D5CCC0", borderRadius:"4px", fontFamily:"'DM Mono'", fontSize:"11px", color:"#5A4A38" } }, "✏ Categorieën");
+  catBtn.addEventListener("click", ()=>setState({ showCatMgr:true }));
+  const budBtn = h("button", { style:{ padding:"5px 12px", background:"transparent", border:"1px solid #D5CCC0", borderRadius:"4px", fontFamily:"'DM Mono'", fontSize:"11px", color:"#5A4A38" } }, "⚙ Budgetten");
+  budBtn.addEventListener("click", ()=>setState({ showBudget:true }));
+  catBtns.appendChild(catBtn); catBtns.appendChild(budBtn);
+  catHdr.appendChild(catBtns);
+  catCard.appendChild(catHdr);
+  for (const c of categories) {
+    const spent=perCat[c.id]||0, budget=budgets[c.id]||0, over=budget>0&&spent>budget;
+    const row = h("div", { style:{ marginBottom:"14px" } });
+    const rl = h("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:"4px" } });
+    rl.appendChild(h("span", { style:{ fontSize:"13px", color:"#2A2420" } }, `${c.emoji} ${c.label}`));
+    const ra = h("div", { style:{ fontFamily:"'DM Mono'", fontSize:"12px" } });
+    ra.appendChild(h("span", { style:{ color:over?"#C0392B":"#2A2420", fontWeight:"500" } }, fmt(spent)));
+    if (budget>0) ra.appendChild(h("span", { style:{ color:"#A89878" } }, ` / ${fmt(budget)}`));
+    rl.appendChild(ra);
+    row.appendChild(rl);
+    row.appendChild(bar(spent, budget||spent||1, c.color));
+    if (over) row.appendChild(h("div", { style:{ fontSize:"10px", color:"#C0392B", fontFamily:"'DM Mono'", marginTop:"2px" } }, `⚠ ${fmt(spent-budget)} over budget`));
+    catCard.appendChild(row);
+  }
+  wrap.appendChild(catCard);
+
+  // Per winkel
+  if (winkels.length>0) {
+    const wCard = h("div", { style:S.card });
+    wCard.appendChild(h("span", { style:S.lbl }, "Per winkel"));
+    for (const w of winkels) {
+      const total = bonnetjes.filter(b=>b.winkel===w).reduce((s,b)=>s+netto(b),0);
+      const row = h("div", { style:{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid #EEE8E0" } });
+      row.appendChild(h("span", { style:{ fontSize:"13px", color:"#2A2420" } }, w));
+      row.appendChild(h("span", { style:{ fontFamily:"'Bebas Neue'", fontSize:"18px", color:"#5A3E28" } }, fmt(total)));
+      wCard.appendChild(row);
+    }
+    wrap.appendChild(wCard);
+  }
+  return wrap;
+}
+
+// ─── TAB: AFREKENEN ───────────────────────────────────────────────────────────
+function buildAfrekenen() {
+  const { bonnetjes } = _state;
+  const totaalNetto = bonnetjes.reduce((s,b)=>s+netto(b),0);
+  const perPersoon  = PERSONS.reduce((acc,p)=>{ acc[p]=bonnetjes.filter(b=>b.persoon===p).reduce((s,b)=>s+netto(b),0); return acc; },{});
+  const diff = perPersoon["Max"]-perPersoon["Merijn"];
+  const s=diff>0?"Merijn":"Max", e=diff>0?"Max":"Merijn";
+
+  const wrap = h("div", { style:{ display:"flex", flexDirection:"column", gap:"16px" } });
+  const main = h("div", { style:{ ...S.card, textAlign:"center", padding:"36px" } });
+  main.appendChild(h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"16px", letterSpacing:"2px", color:"#8A7A68", marginBottom:"8px" } }, "EINDAFREKENING"));
+  if (Math.abs(diff)<0.01) {
+    main.appendChild(h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"36px", color:"#1A6A3A" } }, "✓ Jullie staan quitte!"));
+  } else {
+    main.appendChild(h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"28px", color:"#1A1410", marginBottom:"4px" } }, `${s} betaalt ${e}`));
+    main.appendChild(h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"52px", color:"#8B5E2A", letterSpacing:"2px" } }, fmt(Math.abs(diff)/2)));
+    main.appendChild(h("div", { style:{ fontFamily:"'DM Mono'", fontSize:"12px", color:"#A89878", marginTop:"8px" } }, "om de kosten gelijk te verdelen"));
+  }
+  wrap.appendChild(main);
+
+  const grid = h("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px" } });
+  for (const p of PERSONS) {
+    const c = h("div", { style:S.card });
+    c.appendChild(h("span", { style:S.lbl }, `Betaald door ${p}`));
+    c.appendChild(h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"28px", color:"#1A1410" } }, fmt(perPersoon[p])));
+    c.appendChild(h("div", { style:{ marginTop:"8px", fontFamily:"'DM Mono'", fontSize:"11px", color:"#8A7A68" } }, `Eerlijk aandeel: ${fmt(totaalNetto/2)}`));
+    c.appendChild(h("div", { style:{ fontFamily:"'DM Mono'", fontSize:"11px", color:perPersoon[p]>totaalNetto/2?"#1A6A3A":"#C0392B", marginTop:"2px" } },
+      `${perPersoon[p]>totaalNetto/2?"▲ te veel":"▼ te weinig"}: ${fmt(Math.abs(perPersoon[p]-totaalNetto/2))}`));
+    grid.appendChild(c);
+  }
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+// ─── TAB: TIJDLIJN ────────────────────────────────────────────────────────────
+function buildTijdlijn() {
+  const { bonnetjes, categories } = _state;
+  const byDate = [...bonnetjes].sort((a,b)=>a.datum.localeCompare(b.datum));
+  const dates  = [...new Set(byDate.map(b=>b.datum))];
+  const wrap   = h("div", {});
+  if (!dates.length) return h("div", { style:{ textAlign:"center", padding:"40px", color:"#A89878", fontFamily:"'DM Mono'", fontSize:"13px" } }, "Nog geen bonnetjes.");
+  let running = 0;
+  for (const d of dates) {
+    const items    = byDate.filter(b=>b.datum===d);
+    const dayTotal = items.reduce((s,b)=>s+netto(b),0);
+    running += dayTotal;
+    const row = h("div", { style:{ display:"flex", gap:"16px", marginBottom:"20px" } });
+    const datCol = h("div", { style:{ width:"72px", flexShrink:"0", textAlign:"right", paddingTop:"2px" } });
+    datCol.appendChild(h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"22px", color:"#5A3E28", lineHeight:"1" } }, d.slice(8)));
+    datCol.appendChild(h("div", { style:{ fontFamily:"'DM Mono'", fontSize:"10px", color:"#A89878" } }, MONTHS[parseInt(d.slice(5,7))-1]));
+    row.appendChild(datCol);
+    const line = h("div", { style:{ display:"flex", flexDirection:"column", alignItems:"center" } });
+    line.appendChild(h("div", { style:{ width:"10px", height:"10px", borderRadius:"50%", background:"#8B6A3A", marginTop:"4px" } }));
+    line.appendChild(h("div", { style:{ width:"2px", flex:"1", background:"#DDD5C8", marginTop:"2px" } }));
+    row.appendChild(line);
+    const col = h("div", { style:{ flex:"1" } });
+    for (const b of items) {
+      const card = h("div", { style:{ ...S.card, marginBottom:"6px", padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" } });
+      const inf = h("div", {});
+      inf.appendChild(h("span", { style:{ fontWeight:"500", fontSize:"13px", color:"#1A1410" } }, b.winkel));
+      inf.appendChild(h("span", { style:{ marginLeft:"8px", fontSize:"11px", color:"#A89878", fontFamily:"'DM Mono'" } }, b.persoon));
+      inf.appendChild(h("div", { style:{ marginTop:"3px" } }, splitBadges(b.splits, categories)));
+      card.appendChild(inf);
+      card.appendChild(h("span", { style:{ fontFamily:"'Bebas Neue'", fontSize:"18px", color:"#5A3E28" } }, fmt(netto(b))));
+      col.appendChild(card);
+    }
+    col.appendChild(h("div", { style:{ fontSize:"11px", fontFamily:"'DM Mono'", color:"#8A7A68", marginTop:"2px" } }, `Dag: ${fmt(dayTotal)} · Lopend: ${fmt(running)}`));
+    row.appendChild(col);
+    wrap.appendChild(row);
+  }
+  return wrap;
+}
+
+// ─── MODALS ───────────────────────────────────────────────────────────────────
+function buildBudgetModal() {
+  const { categories, budgets } = _state;
+  let local = { ...budgets };
+  const overlay = h("div", { style:{ position:"fixed", inset:"0", background:"rgba(42,36,32,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:"100" } });
+  const box = h("div", { style:{ background:"#FDFAF7", border:"1px solid #D5CCC0", borderRadius:"8px", padding:"28px", width:"360px", maxHeight:"80vh", overflowY:"auto" } });
+  box.appendChild(h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"22px", letterSpacing:"2px", marginBottom:"16px" } }, "Budget per categorie"));
+  for (const c of categories) {
+    const row = h("div", { style:{ display:"flex", alignItems:"center", gap:"12px", marginBottom:"10px" } });
+    row.appendChild(h("span", { style:{ fontSize:"18px" } }, c.emoji));
+    row.appendChild(h("span", { style:{ fontFamily:"'DM Sans'", fontSize:"13px", flex:"1" } }, c.label));
+    const inp = h("input", { type:"number", value:String(local[c.id]||""), style:{ width:"90px", padding:"6px 10px", border:"1px solid #D5CCC0", borderRadius:"4px", fontFamily:"'DM Mono'", fontSize:"13px", textAlign:"right", background:"#F5F0EB" } });
+    inp.addEventListener("change", e=>{ local[c.id]=parseFloat(e.target.value)||0; });
+    row.appendChild(inp);
+    box.appendChild(row);
+  }
+  const btns = h("div", { style:{ display:"flex", gap:"10px", marginTop:"16px" } });
+  const saveBtn = h("button", { style:S.saveBtn(false) }, "Opslaan");
+  saveBtn.addEventListener("click", ()=>doSaveBudgets(local));
+  const cancelBtn = h("button", { style:S.cancelBtn }, "Annuleren");
+  cancelBtn.addEventListener("click", ()=>setState({ showBudget:false }));
+  btns.appendChild(saveBtn); btns.appendChild(cancelBtn);
+  box.appendChild(btns);
+  overlay.appendChild(box);
+  return overlay;
+}
+
+function buildCatModal() {
+  const { categories } = _state;
+  let cats = categories.map(c=>({...c}));
+  let newCat = { label:"", emoji:"🏠", color:"#5A8B2A" };
+  const inp = { padding:"7px 10px", borderRadius:"4px", border:"1px solid #D5CCC0", fontFamily:"'DM Mono'", fontSize:"12px", background:"#FDFAF7" };
+
+  const overlay = h("div", { style:{ position:"fixed", inset:"0", background:"rgba(42,36,32,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:"200" } });
+  const box = h("div", { style:{ background:"#FDFAF7", border:"1px solid #D5CCC0", borderRadius:"8px", padding:"28px", width:"440px", maxHeight:"80vh", overflowY:"auto" } });
+  box.appendChild(h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"22px", letterSpacing:"2px", marginBottom:"16px" } }, "Categorieën beheren"));
+
+  const listWrap = h("div", { style:{ display:"flex", flexDirection:"column", gap:"8px", marginBottom:"16px" } });
+  const rebuildList = () => {
+    listWrap.innerHTML = "";
+    for (let i=0;i<cats.length;i++) {
+      const c = cats[i];
+      const row = h("div", { style:{ display:"flex", alignItems:"center", gap:"8px" } });
+      const emojiSel = h("select", { style:{ ...inp, width:"54px", fontSize:"16px" } });
+      EMOJI_OPTIONS.forEach(e=>{ const o=h("option",{value:e},e); if(e===c.emoji)o.selected=true; emojiSel.appendChild(o); });
+      emojiSel.addEventListener("change", e=>{ cats[i]={ ...cats[i], emoji:e.target.value }; });
+      const labelInp = h("input", { type:"text", value:c.label, style:{ ...inp, flex:"1" } });
+      labelInp.addEventListener("input", e=>{ cats[i]={ ...cats[i], label:e.target.value }; });
+      const colorInp = h("input", { type:"color", value:c.color, style:{ width:"36px", height:"34px", borderRadius:"4px", border:"1px solid #D5CCC0", cursor:"pointer", padding:"2px" } });
+      colorInp.addEventListener("change", e=>{ cats[i]={ ...cats[i], color:e.target.value }; });
+      const rmBtn = h("button", { style:{ padding:"6px 10px", background:"#FDEAEA", border:"1px solid #E0C0C0", borderRadius:"3px", cursor:"pointer", color:"#8B1A1A" } }, "×");
+      rmBtn.addEventListener("click", ()=>{ cats=cats.filter((_,idx)=>idx!==i); rebuildList(); });
+      row.appendChild(emojiSel); row.appendChild(labelInp); row.appendChild(colorInp); row.appendChild(rmBtn);
+      listWrap.appendChild(row);
+    }
+  };
+  rebuildList();
+  box.appendChild(listWrap);
+
+  // New category
+  const newSection = h("div", { style:{ borderTop:"1px solid #E8E0D5", paddingTop:"14px", marginBottom:"14px" } });
+  newSection.appendChild(h("div", { style:{ fontSize:"10px", letterSpacing:"1.5px", color:"#8A7A68", fontFamily:"'DM Mono'", marginBottom:"8px" } }, "NIEUWE CATEGORIE"));
+  const newRow = h("div", { style:{ display:"flex", gap:"8px" } });
+  const newEmoji = h("select", { style:{ ...inp, width:"54px", fontSize:"16px" } });
+  EMOJI_OPTIONS.forEach(e=>{ const o=h("option",{value:e},e); if(e===newCat.emoji)o.selected=true; newEmoji.appendChild(o); });
+  newEmoji.addEventListener("change", e=>{ newCat.emoji=e.target.value; });
+  const newLabel = h("input", { type:"text", value:"", placeholder:"Naam", style:{ ...inp, flex:"1" } });
+  newLabel.addEventListener("input", e=>{ newCat.label=e.target.value; });
+  const newColor = h("input", { type:"color", value:newCat.color, style:{ width:"36px", height:"34px", borderRadius:"4px", border:"1px solid #D5CCC0", cursor:"pointer", padding:"2px" } });
+  newColor.addEventListener("change", e=>{ newCat.color=e.target.value; });
+  const addBtn = h("button", { style:{ padding:"6px 12px", background:"#5A3E28", color:"#FAF5EE", border:"none", borderRadius:"3px", fontFamily:"'DM Mono'", fontSize:"12px" } }, "+");
+  addBtn.addEventListener("click", ()=>{
+    if (!newCat.label.trim()) return;
+    cats.push({ ...newCat, id:genId() });
+    newCat = { label:"", emoji:"🏠", color:"#5A8B2A" };
+    newLabel.value = "";
+    rebuildList();
+  });
+  newRow.appendChild(newEmoji); newRow.appendChild(newLabel); newRow.appendChild(newColor); newRow.appendChild(addBtn);
+  newSection.appendChild(newRow);
+  box.appendChild(newSection);
+
+  const btns = h("div", { style:{ display:"flex", gap:"10px" } });
+  const saveBtn = h("button", { style:S.saveBtn(false) }, "Opslaan");
+  saveBtn.addEventListener("click", ()=>doSaveCats(cats));
+  const cancelBtn = h("button", { style:S.cancelBtn }, "Annuleren");
+  cancelBtn.addEventListener("click", ()=>setState({ showCatMgr:false }));
+  btns.appendChild(saveBtn); btns.appendChild(cancelBtn);
+  box.appendChild(btns);
+  overlay.appendChild(box);
+  return overlay;
+}
+
+// ─── BOOT ─────────────────────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
