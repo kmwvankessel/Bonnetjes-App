@@ -406,10 +406,21 @@ async function doSaveBudgets(bdg) {
   catch { setSyncMsg("⚠ Opslaan mislukt", "err"); }
 }
 
+function buildFilename(prefix) {
+  const { form, categories } = _state;
+  const datum   = (form.datum||new Date().toISOString().slice(0,10)).replace(/-/g,"");
+  const winkel  = (form.winkel||"onbekend").replace(/[^a-zA-Z0-9]/g,"");
+  const catId   = form.splits?.[0]?.catId;
+  const cat     = categories.find(c=>c.id===catId);
+  const catNaam = (cat?.label||"overig").replace(/[^a-zA-Z0-9]/g,"");
+  return `${datum}_${winkel}_${catNaam}_${prefix}.jpg`;
+}
+
 async function doReceiptPhoto(base64) {
   setState({ formUplFoto:true });
   try {
-    const driveUrl = await uploadDrive(base64, `bonnetje-${genId()}.jpg`);
+    const naam = buildFilename("bonnetje");
+    const driveUrl = await uploadDrive(base64, naam);
     setState(s => ({ form:{ ...s.form, fotoUrl:driveUrl } }));
   } catch { setSyncMsg("⚠ Foto uploaden mislukt. Controleer je verbinding.", "err"); }
   finally { setState({ formUplFoto:false }); }
@@ -418,9 +429,10 @@ async function doReceiptPhoto(base64) {
 async function doProdPhoto(base64) {
   setState({ formUplProd:true });
   try {
-    const url = await uploadDrive(base64, `product-${genId()}.jpg`);
+    const naam = buildFilename("product");
+    const url = await uploadDrive(base64, naam);
     setState(s => ({ form:{ ...s.form, productFotoUrl:url } }));
-  } catch { setState({ formAiMsg:{ ok:false, text:"Productfoto uploaden mislukt." } }); }
+  } catch { setSyncMsg("⚠ Productfoto uploaden mislukt.", "err"); }
   finally { setState({ formUplProd:false }); }
 }
 
