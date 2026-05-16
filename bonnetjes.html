@@ -168,24 +168,7 @@ async function uploadDrive(base64, filename) {
   return `https://drive.google.com/uc?id=${file.id}`;
 }
 
-// ─── AI ───────────────────────────────────────────────────────────────────────
-async function analyseReceipt(base64, categories) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({
-      model:"claude-sonnet-4-20250514", max_tokens:1000,
-      messages:[{ role:"user", content:[
-        { type:"image", source:{ type:"base64", media_type:"image/jpeg", data: base64.includes(",") ? base64.split(",")[1] : base64 } },
-        { type:"text", text:`Analyseer dit kassabon. Geef ALLEEN JSON terug, geen markdown.
-Beschikbare categorieën: ${categories.map(c=>c.label).join(", ")}.
-Formaat: {"winkel":"naam","bedrag":12.34,"datum":"YYYY-MM-DD","splits":[{"catLabel":"Materiaal","pct":100}],"notitie":"omschrijving"}
-splits moet optellen tot 100. Gebruik null voor onbekende velden.` }
-      ]}]
-    })
-  });
-  const d = await res.json();
-  return JSON.parse(d.content?.map(c=>c.text||"").join("").replace(/```json|```/g,"").trim());
-}
+// AI herkenning verwijderd
 
 // ─── MINI FRAMEWORK ───────────────────────────────────────────────────────────
 // Simple reactive state + DOM rendering without React dependency
@@ -353,10 +336,8 @@ _state = {
   syncMsg: null,
   // Form state
   form: null,
-  formAiMsg: null,
   formUplFoto: false,
   formUplProd: false,
-  formAiLoading: false,
 };
 
 // ─── ACTIONS ──────────────────────────────────────────────────────────────────
@@ -426,27 +407,12 @@ async function doSaveBudgets(bdg) {
 }
 
 async function doReceiptPhoto(base64) {
-  setState({ formUplFoto:true, formAiLoading:true, formAiMsg:null });
+  setState({ formUplFoto:true });
   try {
     const driveUrl = await uploadDrive(base64, `bonnetje-${genId()}.jpg`);
     setState(s => ({ form:{ ...s.form, fotoUrl:driveUrl } }));
-    try {
-      const result = await analyseReceipt(base64, _state.categories);
-      setState(s => ({
-        form: { ...s.form, fotoUrl:driveUrl,
-          winkel:  result.winkel  || s.form.winkel,
-          bedrag:  result.bedrag  != null ? result.bedrag : s.form.bedrag,
-          datum:   result.datum   || s.form.datum,
-          notitie: result.notitie || s.form.notitie,
-          splits:  result.splits?.length
-            ? result.splits.map(sp=>{ const cat=_state.categories.find(c=>c.label.toLowerCase()===sp.catLabel?.toLowerCase())||_state.categories[0]; return {catId:cat.id,pct:sp.pct}; })
-            : s.form.splits,
-        },
-        formAiMsg: { ok:true, text:"✓ Gegevens ingevuld door AI — controleer hieronder" }
-      }));
-    } catch { setState({ formAiMsg:{ ok:false, text:"Foto opgeslagen ✓ maar AI-herkenning mislukt." } }); }
-  } catch { setState({ formAiMsg:{ ok:false, text:"Upload mislukt. Controleer je verbinding." } }); }
-  finally { setState({ formUplFoto:false, formAiLoading:false }); }
+  } catch { setSyncMsg("⚠ Foto uploaden mislukt. Controleer je verbinding.", "err"); }
+  finally { setState({ formUplFoto:false }); }
 }
 
 async function doProdPhoto(base64) {
@@ -561,7 +527,7 @@ function buildMain() {
 
 // ─── TAB: BONNETJES ───────────────────────────────────────────────────────────
 function buildBonnetjes() {
-  const { bonnetjes, categories, filter, filterCat, filterWinkel, showForm, editItem, expandedId, isSaving, form, formAiMsg, formUplFoto, formUplProd, formAiLoading } = _state;
+  const { bonnetjes, categories, filter, filterCat, filterWinkel, showForm, editItem, expandedId, isSaving, form, formUplFoto, formUplProd } = _state;
   const wrap = h("div", {});
   const winkels = [...new Set(bonnetjes.map(b=>b.winkel).filter(Boolean))].sort();
 
@@ -594,7 +560,7 @@ function buildBonnetjes() {
   wrap.appendChild(filterRow);
 
   // Form (new)
-  if (showForm && !editItem) wrap.appendChild(buildForm(form, false, isSaving, formAiMsg, formUplFoto, formUplProd, formAiLoading));
+  if (showForm && !editItem) wrap.appendChild(buildForm(form, false, isSaving, formUplFoto, formUplProd));
 
   // List
   const filtered = bonnetjes.filter(b=>{
@@ -622,7 +588,7 @@ function buildBonnetjes() {
     const card = h("div", { style:{ ...S.card, borderLeft:`4px solid ${mainCat?.color||"#ccc"}`, marginBottom:"8px" } });
 
     if (isEdit) {
-      card.appendChild(buildForm(form, true, isSaving, formAiMsg, formUplFoto, formUplProd, formAiLoading));
+      card.appendChild(buildForm(form, true, isSaving, formUplFoto, formUplProd));
     } else {
       // Row
       const row = h("div", { style:{ display:"flex", alignItems:"center", gap:"12px", cursor:"pointer" } });
@@ -700,7 +666,7 @@ function buildBonnetjes() {
   // Add button
   if (!showForm && !editItem) {
     const addBtn = h("div", { style:{ marginTop:"16px", width:"100%", padding:"16px", background:"transparent", border:"2px dashed #C8BEB2", borderRadius:"6px", color:"#8A7A68", fontFamily:"'DM Mono'", fontSize:"13px", textAlign:"center", cursor:"pointer" } }, "+ Nieuw bonnetje toevoegen");
-    addBtn.addEventListener("click", ()=>setState({ showForm:true, editItem:null, form:makeEmpty(), formAiMsg:null }));
+    addBtn.addEventListener("click", ()=>setState({ showForm:true, editItem:null, form:makeEmpty() }));
     wrap.appendChild(addBtn);
   }
 
@@ -708,7 +674,7 @@ function buildBonnetjes() {
 }
 
 // ─── FORM ─────────────────────────────────────────────────────────────────────
-function buildForm(form, isEdit, isSaving, aiMsg, uplFoto, uplProd, aiLoading) {
+function buildForm(form, isEdit, isSaving, uplFoto, uplProd) {
   const { categories } = _state;
   const splitsTotal = (form.splits||[]).reduce((s,x)=>s+(x.pct||0),0);
   const splitsOk = Math.abs(splitsTotal-100)<0.5;
@@ -718,15 +684,15 @@ function buildForm(form, isEdit, isSaving, aiMsg, uplFoto, uplProd, aiLoading) {
   const wrap = h("div", { style:{ background:"#FDFAF7", border:"1px solid #D5CCC0", borderRadius:"6px", padding:"20px", marginBottom:"16px" } });
   wrap.appendChild(h("div", { style:{ fontFamily:"'Bebas Neue'", fontSize:"20px", letterSpacing:"2px", color:"#2A2420", marginBottom:"16px" } }, isEdit?"✏ Bewerken":"+ Nieuw bonnetje"));
 
-  // Receipt photo
+  // Foto upload (zonder AI)
   const fotoBox = h("div", { style:{ padding:"14px", background:"#F5F0EB", borderRadius:"6px", border:"1px solid #E8E0D5", marginBottom:"12px" } });
-  fotoBox.appendChild(h("div", { style:{ fontSize:"10px", letterSpacing:"1.5px", color:"#8A7A68", fontFamily:"'DM Mono'", marginBottom:"8px" } }, "📄 FOTO BONNETJE — Drive + AI herkenning"));
+  fotoBox.appendChild(h("div", { style:{ fontSize:"10px", letterSpacing:"1.5px", color:"#8A7A68", fontFamily:"'DM Mono'", marginBottom:"8px" } }, "📄 FOTO BONNETJE — wordt opgeslagen in Drive"));
   const fotoRow = h("div", { style:{ display:"flex", gap:"16px", alignItems:"flex-start" } });
-  fotoRow.appendChild(photoThumb({ url:form.fotoUrl, label:"", size:72, loading:uplFoto||aiLoading, onAdd: doReceiptPhoto }));
-  const fotoMsg = h("div", { style:{ flex:"1", fontFamily:"'DM Mono'", fontSize:"12px" } });
-  if (uplFoto||aiLoading) fotoMsg.appendChild(h("div", { style:{ color:"#5A3E28" } }, uplFoto?"⏳ Uploaden naar Drive…":"⏳ AI analyseert bonnetje…"));
-  else if (aiMsg) fotoMsg.appendChild(h("div", { style:{ color:aiMsg.ok?"#1A6A3A":"#C0392B" } }, aiMsg.text));
-  else fotoMsg.appendChild(h("div", { style:{ color:"#A89878" } }, "Upload een foto om automatisch in te vullen."));
+  fotoRow.appendChild(photoThumb({ url:form.fotoUrl, label:"", size:72, loading:uplFoto, onAdd: doReceiptPhoto }));
+  const fotoMsg = h("div", { style:{ flex:"1", fontFamily:"'DM Mono'", fontSize:"12px", color:"#A89878" } });
+  if (uplFoto) fotoMsg.appendChild(h("div", { style:{ color:"#5A3E28" } }, "⏳ Uploaden naar Drive…"));
+  else if (!form.fotoUrl) fotoMsg.appendChild(document.createTextNode("Upload een foto van het bonnetje (optioneel)."));
+  else fotoMsg.appendChild(h("div", { style:{ color:"#1A6A3A" } }, "✓ Foto opgeslagen in Drive"));
   fotoRow.appendChild(fotoMsg);
   fotoBox.appendChild(fotoRow);
   wrap.appendChild(fotoBox);
