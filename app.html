@@ -1262,13 +1262,14 @@ function renderWizStep2(card) {
     <button class="btn-add-row" onclick="addWizMember()">+ Nog iemand toevoegen</button>
     <div class="wiz-nav" style="margin-top:20px">
       <button class="btn-secondary" onclick="wizPrev()">← Terug</button>
-      <button class="btn-primary" onclick="wizStep++;renderWizardStep()">Volgende →</button>
+      <button class="btn-primary" onclick="wizNext2()">Volgende →</button>
     </div>`;
   if (!wizData.members.length) { wizData.members.push({name:'',email:''}); renderWizardStep(); }
 }
 window.updateWizMember = (i,k,v) => { wizData.members[i][k]=v; };
 window.removeWizMember = i => { wizData.members.splice(i,1); renderWizardStep(); };
 window.addWizMember    = () => { wizData.members.push({name:'',email:''}); renderWizardStep(); };
+window.wizNext2        = () => { wizStep++; renderWizardStep(); };
 
 function renderWizStep3(card) {
   card.innerHTML = `
