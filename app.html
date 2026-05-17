@@ -1182,10 +1182,14 @@ window.removeMemberFromProject = async email => {
 // WIZARD (nieuw project)
 // ══════════════════════════════════════════════════════════════════════════════
 let wizStep = 0, wizData = {};
+window.wizStep = wizStep;
+window.wizData = wizData;
 
 function startWizard() {
   wizStep = 0;
   wizData = { name:'', type:'', members:[], sheetId:'', folderId:'' };
+  window.wizStep = wizStep;
+  window.wizData = wizData;
   showScreen('wizard');
   renderWizardStep();
 }
@@ -1269,7 +1273,6 @@ function renderWizStep2(card) {
 window.updateWizMember = (i,k,v) => { wizData.members[i][k]=v; };
 window.removeWizMember = i => { wizData.members.splice(i,1); renderWizardStep(); };
 window.addWizMember    = () => { wizData.members.push({name:'',email:''}); renderWizardStep(); };
-window.wizNext2        = () => { wizStep++; renderWizardStep(); };
 
 function renderWizStep3(card) {
   card.innerHTML = `
@@ -1300,7 +1303,15 @@ function renderWizStep3(card) {
 }
 
 window.wizPrev = () => { wizStep--; renderWizardStep(); };
-window.backToApp = () => { if(currentProject) { showScreen('app'); } else showScreen('empty'); };
+window.wizNext0 = () => {
+  const v = document.getElementById('w-name')?.value.trim();
+  if (!v) return;
+  wizData.name = v; wizStep++; renderWizardStep();
+};
+window.selectType = id => { wizData.type=id; renderWizardStep(); };
+window.wizNext1   = () => { if(!wizData.type)return; wizStep++; renderWizardStep(); };
+window.wizNext2   = () => { wizStep++; renderWizardStep(); };
+window.backToApp  = () => { if(currentProject) { showScreen('app'); } else showScreen('empty'); };
 window.finishWizard = () => finishWizardWithGoogle(true);
 window.finishWizardWithGoogle = async (skipGoogle=false) => {
   if (!skipGoogle) {
@@ -1309,7 +1320,7 @@ window.finishWizardWithGoogle = async (skipGoogle=false) => {
   }
   syncMsg('⏳ Project aanmaken…');
   try {
-    const members = wizData.members.filter(m=>m.email.trim());
+    const members = (wizData.members||[]).filter(m=>m.email?.trim());
     const pid     = await createProject({
       name:     wizData.name,
       type:     wizData.type,
