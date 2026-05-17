@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Bonnetjes — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1A1410;--surface:#241C16;--surface2:#2E2418;--surface3:#3A2E24;
+  --ink:#FAF5EE;--ink2:#C8B8A8;--ink3:#8A7A68;
+  --border:#3A2E24;--border2:#4A3E34;
+  --accent:#D4A97A;--accent2:#8B5E2A;
+  --green:#4A9A6A;--green-bg:#1A3A28;
+  --red:#C04040;--red-bg:#3A1A1A;
+  --yellow:#C8A040;--yellow-bg:#3A2E10;
+  --radius:6px;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+button{cursor:pointer;font-family:inherit}
+input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
+select,input{font-family:'DM Mono',monospace;color:var(--ink)}
+
+/* TOPBAR */
+#topbar{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;position:sticky;top:0;z-index:50}
+.tb-logo{font-family:'Bebas Neue';font-size:20px;letter-spacing:2px;color:var(--accent)}
+.tb-sep{width:1px;height:20px;background:var(--border2)}
+.tb-label{font-family:'DM Mono';font-size:11px;color:var(--ink3);letter-spacing:1.5px}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.notif-btn{position:relative;background:none;border:none;font-size:18px;cursor:pointer;padding:4px}
+.notif-badge{position:absolute;top:0;right:0;width:16px;height:16px;border-radius:50%;background:var(--red);font-family:'DM Mono';font-size:9px;color:#fff;display:flex;align-items:center;justify-content:center;display:none}
+.notif-badge.show{display:flex}
+.tb-email{font-family:'DM Mono';font-size:11px;color:var(--ink3)}
+.btn-logout{padding:6px 14px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;font-family:'DM Mono';font-size:11px;color:var(--ink2);cursor:pointer}
+
+/* LAYOUT */
+.admin-layout{display:grid;grid-template-columns:200px 1fr;min-height:calc(100vh - 52px)}
+.admin-sidebar{background:var(--surface);border-right:1px solid var(--border);padding:20px 0}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;font-family:'DM Mono';font-size:12px;color:var(--ink3);cursor:pointer;transition:all .15s;border-left:2px solid transparent}
+.nav-item:hover{color:var(--ink);background:var(--surface2)}
+.nav-item.active{color:var(--accent);background:var(--surface2);border-left-color:var(--accent)}
+.nav-icon{font-size:14px}
+.admin-main{padding:28px;overflow-y:auto}
+
+/* CARDS */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+.panel-title{font-family:'Bebas Neue';font-size:18px;letter-spacing:1.5px;color:var(--accent);margin-bottom:16px}
+.panel-sub{font-family:'DM Mono';font-size:11px;color:var(--ink3);margin-bottom:16px}
+
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:24px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.stat-l{font-family:'DM Mono';font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.stat-v{font-family:'Bebas Neue';font-size:28px;color:var(--accent);letter-spacing:1px}
+
+/* TABLES */
+.data-table{width:100%;border-collapse:collapse}
+.data-table th{font-family:'DM Mono';font-size:10px;letter-spacing:1px;color:var(--ink3);text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--border);text-align:left}
+.data-table td{padding:10px 12px;border-bottom:1px solid var(--surface2);font-size:13px;vertical-align:middle}
+.data-table tr:hover td{background:var(--surface2)}
+
+/* BADGES */
+.badge{display:inline-block;padding:2px 8px;border-radius:3px;font-family:'DM Mono';font-size:10px;font-weight:500}
+.badge.owner{background:var(--surface3);color:var(--accent);border:1px solid var(--border2)}
+.badge.member{background:#1A2A3A;color:#7A9AC8;border:1px solid #2A3A4A}
+.badge.super{background:#2A1A3A;color:#B07AD4;border:1px solid #3A2A4A}
+.badge.blocked{background:var(--red-bg);color:var(--red);border:1px solid #5A2A2A}
+.badge.active{background:var(--green-bg);color:var(--green);border:1px solid #2A4A3A}
+
+/* FORMS */
+.f-group{margin-bottom:14px}
+.f-label{display:block;font-family:'DM Mono';font-size:10px;letter-spacing:1.5px;color:var(--ink3);text-transform:uppercase;margin-bottom:5px}
+.f-inp{width:100%;padding:9px 12px;border:1px solid var(--border2);border-radius:4px;background:var(--surface2);font-family:'DM Mono';font-size:13px;color:var(--ink)}
+.f-inp:focus{outline:2px solid var(--accent)}
+.btn-prim{padding:10px 20px;background:var(--accent2);color:var(--ink);border:none;border-radius:4px;font-family:'DM Mono';font-size:12px;cursor:pointer}
+.btn-prim:hover{background:var(--accent)}
+.btn-sec{padding:10px 16px;background:transparent;border:1px solid var(--border2);border-radius:4px;font-family:'DM Mono';font-size:12px;color:var(--ink3);cursor:pointer}
+.btn-sec:hover{border-color:var(--ink3);color:var(--ink)}
+.btn-danger{padding:7px 14px;background:var(--red-bg);border:1px solid #5A2A2A;border-radius:4px;font-family:'DM Mono';font-size:11px;color:var(--red);cursor:pointer}
+.btn-sm{padding:5px 12px;border-radius:3px;font-family:'DM Mono';font-size:11px;cursor:pointer;border:1px solid var(--border2);background:var(--surface3);color:var(--ink2)}
+
+/* TYPES */
+.type-row{display:flex;align-items:center;gap:10px;padding:10px;background:var(--surface2);border-radius:4px;margin-bottom:6px}
+.type-emoji{font-size:20px;width:32px;text-align:center}
+.type-label{flex:1;font-size:13px}
+.type-actions{display:flex;gap:6px}
+
+/* NOTIFICATIONS */
+.notif-item{padding:14px 16px;border-bottom:1px solid var(--surface2);display:flex;gap:12px;align-items:flex-start}
+.notif-item.unread{background:var(--surface2)}
+.notif-icon{font-size:18px;flex-shrink:0;margin-top:1px}
+.notif-body{flex:1}
+.notif-title{font-size:13px;font-weight:500;margin-bottom:2px}
+.notif-meta{font-family:'DM Mono';font-size:11px;color:var(--ink3)}
+.notif-mark{background:none;border:none;font-family:'DM Mono';font-size:11px;color:var(--ink3);cursor:pointer;text-decoration:underline}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:28px;width:100%;max-width:440px}
+.modal-title{font-family:'Bebas Neue';font-size:22px;letter-spacing:1.5px;margin-bottom:16px}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+
+@media(max-width:640px){.admin-layout{grid-template-columns:1fr}.admin-sidebar{display:none}}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="tb-logo">🧾 ADMIN</div>
+  <div class="tb-sep"></div>
+  <div class="tb-label">SUPER ADMIN DASHBOARD</div>
+  <div class="tb-right">
+    <button class="notif-btn" id="notif-btn" onclick="setView('notificaties')" title="Notificaties">
+      🔔<span class="notif-badge" id="notif-badge">0</span>
+    </button>
+    <span class="tb-email" id="tb-email"></span>
+    <button class="btn-logout" id="btn-logout">Uitloggen</button>
+    <a href="./app.html" style="padding:6px 14px;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;font-family:'DM Mono';font-size:11px;color:var(--ink2);text-decoration:none">→ App</a>
+  </div>
+</div>
+
+<div class="admin-layout">
+  <div class="admin-sidebar">
+    <div class="nav-item active" data-view="dashboard" onclick="setView('dashboard')"><span class="nav-icon">📊</span>Dashboard</div>
+    <div class="nav-item" data-view="gebruikers" onclick="setView('gebruikers')"><span class="nav-icon">👥</span>Gebruikers</div>
+    <div class="nav-item" data-view="projecten" onclick="setView('projecten')"><span class="nav-icon">📁</span>Projecten</div>
+    <div class="nav-item" data-view="types" onclick="setView('types')"><span class="nav-icon">🏷️</span>Project-types</div>
+    <div class="nav-item" data-view="notificaties" onclick="setView('notificaties')"><span class="nav-icon">🔔</span>Notificaties</div>
+  </div>
+  <div class="admin-main" id="admin-main">
+    <div style="font-family:'DM Mono';font-size:13px;color:var(--ink3)">Laden…</div>
+  </div>
+</div>
+
+<script type="module">
+import {
+  onAuth, logout, getCurrentUserDoc,
+  getMyProjects, updateProject, deleteProject,
+  getProjectTypes, saveProjectTypes, DEFAULT_PROJECT_TYPES,
+  listenNotifications, markNotificationRead, blockUser,
+  db, auth
+} from './firebase.js';
+import { collection, getDocs, orderBy, query, updateDoc, doc }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// ── STATE ──
+let allUsers    = [];
+let allProjects = [];
+let allTypes    = DEFAULT_PROJECT_TYPES;
+let notifs      = [];
+let currentView = 'dashboard';
+
+const MONTHS = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+const escH   = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmtDate = ts => {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+};
+
+// ── BOOT ──
+onAuth(async user => {
+  if (!user) { window.location.href = './index.html'; return; }
+  const userDoc = await getCurrentUserDoc();
+  if (userDoc?.role !== 'super_admin') { window.location.href = './app.html'; return; }
+
+  document.getElementById('tb-email').textContent = user.email;
+  document.getElementById('btn-logout').onclick = async () => { await logout(); window.location.href = './index.html'; };
+
+  await loadAll();
+
+  listenNotifications(data => {
+    notifs = data;
+    const badge = document.getElementById('notif-badge');
+    badge.textContent = data.length;
+    badge.classList.toggle('show', data.length > 0);
+    if (currentView === 'notificaties') renderView();
+  });
+});
+
+async function loadAll() {
+  const [uSnap, pSnap, types] = await Promise.all([
+    getDocs(query(collection(db, 'users'), orderBy('createdAt','desc'))),
+    getDocs(query(collection(db, 'projects'), orderBy('createdAt','desc'))),
+    getProjectTypes()
+  ]);
+  allUsers    = uSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  allProjects = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  allTypes    = types;
+  renderView();
+}
+
+// ── NAVIGATION ──
+window.setView = name => {
+  currentView = name;
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.view===name));
+  renderView();
+};
+
+function renderView() {
+  const main = document.getElementById('admin-main');
+  if (currentView === 'dashboard')     main.innerHTML = buildDashboard();
+  if (currentView === 'gebruikers')    main.innerHTML = buildGebruikers();
+  if (currentView === 'projecten')     main.innerHTML = buildProjecten();
+  if (currentView === 'types')         { main.innerHTML = buildTypes(); bindTypeEvents(); }
+  if (currentView === 'notificaties')  main.innerHTML = buildNotificaties();
+}
+
+// ── DASHBOARD ──
+function buildDashboard() {
+  const activeUsers    = allUsers.filter(u=>!u.blocked).length;
+  const blockedUsers   = allUsers.filter(u=>u.blocked).length;
+  const activeProjects = allProjects.filter(p=>!p.archived).length;
+  const totalBonnetjes = 0; // zou extra query vereisen
+
+  return `
+    <div style="margin-bottom:24px">
+      <div style="font-family:'Bebas Neue';font-size:28px;letter-spacing:2px;color:var(--accent);margin-bottom:4px">DASHBOARD</div>
+      <div style="font-family:'DM Mono';font-size:11px;color:var(--ink3)">Overzicht van alle activiteit</div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat"><div class="stat-l">Gebruikers</div><div class="stat-v">${activeUsers}</div></div>
+      <div class="stat"><div class="stat-l">Geblokkeerd</div><div class="stat-v" style="color:var(--red)">${blockedUsers}</div></div>
+      <div class="stat"><div class="stat-l">Projecten</div><div class="stat-v">${activeProjects}</div></div>
+      <div class="stat"><div class="stat-l">Notificaties</div><div class="stat-v" style="color:var(--yellow)">${notifs.length}</div></div>
+    </div>
+
+    ${notifs.length > 0 ? `
+    <div class="panel">
+      <div class="panel-title">ONGELEZEN NOTIFICATIES</div>
+      ${notifs.slice(0,5).map(n => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--surface2)">
+          <div>
+            <div style="font-size:13px;font-weight:500">🆕 ${escH(n.projectName||'Nieuw project')} — ${escH(n.ownerName||n.ownerEmail||'')}</div>
+            <div style="font-family:'DM Mono';font-size:11px;color:var(--ink3);margin-top:2px">${fmtDate(n.createdAt)}</div>
+          </div>
+          <button class="btn-sm" onclick="markRead('${n.id}')">✓ Gelezen</button>
+        </div>`).join('')}
+    </div>` : ''}
+
+    <div class="panel">
+      <div class="panel-title">RECENTE PROJECTEN</div>
+      <table class="data-table">
+        <thead><tr><th>Naam</th><th>Type</th><th>Eigenaar</th><th>Aangemaakt</th></tr></thead>
+        <tbody>
+          ${allProjects.filter(p=>!p.archived).slice(0,8).map(p=>`
+            <tr>
+              <td>${escH(p.name)}</td>
+              <td>${allTypes.find(t=>t.id===p.type)?.emoji||'📦'} ${allTypes.find(t=>t.id===p.type)?.label||p.type||'—'}</td>
+              <td style="font-family:'DM Mono';font-size:11px;color:var(--ink3)">${escH(p.ownerEmail||'—')}</td>
+              <td style="font-family:'DM Mono';font-size:11px;color:var(--ink3)">${fmtDate(p.createdAt)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ── GEBRUIKERS ──
+function buildGebruikers() {
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+      <div>
+        <div style="font-family:'Bebas Neue';font-size:28px;letter-spacing:2px;color:var(--accent)">GEBRUIKERS</div>
+        <div style="font-family:'DM Mono';font-size:11px;color:var(--ink3)">${allUsers.length} gebruikers totaal</div>
+      </div>
+    </div>
+    <div class="panel" style="padding:0;overflow:hidden">
+      <table class="data-table">
+        <thead><tr><th>Gebruiker</th><th>Rol</th><th>Projecten</th><th>Aangemaakt</th><th>Acties</th></tr></thead>
+        <tbody>
+          ${allUsers.map(u => {
+            const userProjects = allProjects.filter(p=>p.ownerUid===u.uid||'').length;
+            const roleLabel = u.role==='super_admin'?'super':u.role==='owner'?'owner':'member';
+            return `<tr>
+              <td>
+                <div style="font-weight:500">${escH(u.name||u.email)}</div>
+                <div style="font-family:'DM Mono';font-size:10px;color:var(--ink3)">${escH(u.email)}</div>
+              </td>
+              <td><span class="badge ${roleLabel}">${roleLabel}</span></td>
+              <td style="font-family:'DM Mono';font-size:12px">${userProjects}</td>
+              <td style="font-family:'DM Mono';font-size:11px;color:var(--ink3)">${fmtDate(u.createdAt)}</td>
+              <td>
+                ${u.role !== 'super_admin' ? `
+                  <button class="btn-sm ${u.blocked?'':'danger'}" onclick="toggleBlock('${u.id}',${!u.blocked})">
+                    ${u.blocked?'✓ Deblokkeren':'⛔ Blokkeren'}
+                  </button>` : '<span style="font-family:\'DM Mono\';font-size:10px;color:var(--ink3)">—</span>'}
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ── PROJECTEN ──
+function buildProjecten() {
+  const active   = allProjects.filter(p=>!p.archived);
+  const archived = allProjects.filter(p=>p.archived);
+  return `
+    <div style="margin-bottom:24px">
+      <div style="font-family:'Bebas Neue';font-size:28px;letter-spacing:2px;color:var(--accent)">PROJECTEN</div>
+      <div style="font-family:'DM Mono';font-size:11px;color:var(--ink3)">${active.length} actief · ${archived.length} gearchiveerd</div>
+    </div>
+    <div class="panel" style="padding:0;overflow:hidden">
+      <table class="data-table">
+        <thead><tr><th>Project</th><th>Type</th><th>Eigenaar</th><th>Deelnemers</th><th>Drive</th><th>Sheets</th><th>Status</th></tr></thead>
+        <tbody>
+          ${allProjects.map(p => `
+            <tr>
+              <td><div style="font-weight:500">${escH(p.name)}</div></td>
+              <td>${allTypes.find(t=>t.id===p.type)?.emoji||'📦'} ${allTypes.find(t=>t.id===p.type)?.label||p.type||'—'}</td>
+              <td style="font-family:'DM Mono';font-size:11px;color:var(--ink3)">${escH(p.ownerEmail||'—')}</td>
+              <td style="font-family:'DM Mono';font-size:12px">${(p.members||[]).length}</td>
+              <td><span style="color:${p.folderId?'var(--green)':'var(--ink3)';font-size:14px">${p.folderId?'✓':'—'}</span></td>
+              <td><span style="color:${p.sheetId?'var(--green)':'var(--ink3)';font-size:14px">${p.sheetId?'✓':'—'}</span></td>
+              <td><span class="badge ${p.archived?'blocked':'active'}">${p.archived?'gearchiveerd':'actief'}</span></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ── PROJECT TYPES ──
+function buildTypes() {
+  return `
+    <div style="margin-bottom:24px">
+      <div style="font-family:'Bebas Neue';font-size:28px;letter-spacing:2px;color:var(--accent)">PROJECT-TYPES</div>
+      <div style="font-family:'DM Mono';font-size:11px;color:var(--ink3);margin-bottom:4px">Bepaal welke types beschikbaar zijn voor nieuwe projecten</div>
+    </div>
+
+    <div class="panel" style="max-width:560px">
+      <div class="panel-title">ACTIEVE TYPES</div>
+      <div id="types-list">
+        ${allTypes.map((t,i) => `
+          <div class="type-row" id="type-${i}">
+            <div class="type-emoji">${t.emoji}</div>
+            <div class="type-label">
+              <div style="font-weight:500">${escH(t.label)}</div>
+              <div style="font-family:'DM Mono';font-size:10px;color:var(--ink3)">${t.id}</div>
+            </div>
+            <div class="type-actions">
+              <button class="btn-sm" onclick="toggleType(${i})" style="color:${t.active?'var(--green)':'var(--red)'};border-color:${t.active?'var(--green)':'var(--red)'}">
+                ${t.active?'✓ Actief':'✗ Verborgen'}
+              </button>
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <div style="border-top:1px solid var(--border2);margin-top:16px;padding-top:16px">
+        <div style="font-family:'DM Mono';font-size:11px;color:var(--ink3);margin-bottom:12px;letter-spacing:1px">NIEUW TYPE TOEVOEGEN</div>
+        <div style="display:grid;grid-template-columns:56px 1fr 56px;gap:8px;margin-bottom:8px">
+          <input class="f-inp" id="new-type-emoji" type="text" placeholder="🏠" maxlength="2" style="text-align:center;font-size:20px"/>
+          <input class="f-inp" id="new-type-label" type="text" placeholder="Type naam"/>
+          <input class="f-inp" id="new-type-color" type="color" value="#8B5E2A" style="padding:4px;height:42px"/>
+        </div>
+        <button class="btn-prim" onclick="addType()">+ Toevoegen</button>
+      </div>
+
+      <div style="margin-top:16px">
+        <button class="btn-prim" onclick="saveTypes()">💾 Opslaan</button>
+      </div>
+    </div>`;
+}
+
+function bindTypeEvents() {}
+
+window.toggleType = i => {
+  allTypes[i].active = !allTypes[i].active;
+  renderView();
+};
+window.addType = () => {
+  const emoji = document.getElementById('new-type-emoji')?.value.trim()||'📦';
+  const label = document.getElementById('new-type-label')?.value.trim();
+  const color = document.getElementById('new-type-color')?.value||'#8B5E2A';
+  if (!label) return;
+  const id = label.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,20);
+  allTypes.push({ id, label, emoji, color, active: true });
+  renderView();
+};
+window.saveTypes = async () => {
+  await saveProjectTypes(allTypes);
+  showToast('✓ Types opgeslagen');
+};
+
+// ── NOTIFICATIES ──
+function buildNotificaties() {
+  return `
+    <div style="margin-bottom:24px">
+      <div style="font-family:'Bebas Neue';font-size:28px;letter-spacing:2px;color:var(--accent)">NOTIFICATIES</div>
+      <div style="font-family:'DM Mono';font-size:11px;color:var(--ink3)">${notifs.length} ongelezen</div>
+    </div>
+    <div class="panel" style="padding:0;overflow:hidden;max-width:700px">
+      ${notifs.length === 0
+        ? `<div style="padding:40px;text-align:center;font-family:'DM Mono';font-size:13px;color:var(--ink3)">Geen ongelezen notificaties.</div>`
+        : notifs.map(n => `
+          <div class="notif-item unread">
+            <div class="notif-icon">🆕</div>
+            <div class="notif-body">
+              <div class="notif-title">Nieuw project: ${escH(n.projectName||'?')}</div>
+              <div class="notif-meta">Door ${escH(n.ownerName||n.ownerEmail||'?')} · ${fmtDate(n.createdAt)}</div>
+            </div>
+            <button class="notif-mark" onclick="markRead('${n.id}')">✓ Gelezen</button>
+          </div>`).join('')}
+    </div>`;
+}
+
+// ── ACTIONS ──
+window.toggleBlock = async (uid, blocked) => {
+  await blockUser(uid, blocked);
+  allUsers = allUsers.map(u => u.id===uid ? {...u, blocked} : u);
+  renderView();
+  showToast(blocked ? '⛔ Gebruiker geblokkeerd' : '✓ Gebruiker gedeblokkeerd');
+};
+
+window.markRead = async id => {
+  await markNotificationRead(id);
+  notifs = notifs.filter(n=>n.id!==id);
+  const badge = document.getElementById('notif-badge');
+  badge.textContent = notifs.length;
+  badge.classList.toggle('show', notifs.length>0);
+  renderView();
+};
+
+function showToast(msg) {
+  let t = document.getElementById('admin-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'admin-toast';
+    t.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface3);color:var(--ink);border:1px solid var(--border2);padding:10px 20px;border-radius:20px;font-family:"DM Mono";font-size:12px;z-index:200;opacity:0;transition:opacity .3s';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  setTimeout(()=>t.style.opacity='0', 2500);
+}
+</script>
+</body>
+</html>

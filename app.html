@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Bonnetjes Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F2EBE0;--surface:#FDFAF7;--surface2:#F0E8DC;
+  --ink:#2A1E14;--ink2:#6B5A48;--ink3:#A89878;
+  --border:#DDD5C8;--border2:#C8BEB2;
+  --accent:#8B5E2A;--accent2:#D4A97A;
+  --green:#1A6A3A;--green-bg:#E8F5ED;
+  --red:#8B1A1A;--red-bg:#FDEAEA;
+  --yellow:#7A5800;--yellow-bg:#FFF5D6;
+  --blue:#1A3A6A;--blue-bg:#E8EEF8;
+  --radius:6px;--radius-lg:10px;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);min-height:100vh;color:var(--ink)}
+button{cursor:pointer;font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent2);outline-offset:1px}
+select,input[type=text],input[type=number],input[type=date],input[type=email],textarea{font-family:'DM Mono',monospace}
+
+/* ── TOPBAR ── */
+#topbar{height:52px;background:var(--ink);display:flex;align-items:center;padding:0 20px;gap:0;position:sticky;top:0;z-index:50;overflow-x:auto;scrollbar-width:none}
+#topbar::-webkit-scrollbar{display:none}
+.tb-logo{font-family:'Bebas Neue';font-size:20px;letter-spacing:2px;color:var(--accent2);margin-right:4px;white-space:nowrap;flex-shrink:0}
+.tb-sep{width:1px;height:20px;background:rgba(255,255,255,.15);margin:0 12px;flex-shrink:0}
+#proj-tabs{display:flex;align-items:stretch;gap:0;overflow-x:auto;scrollbar-width:none;flex:1}
+#proj-tabs::-webkit-scrollbar{display:none}
+.pt-btn{padding:0 16px;height:52px;font-family:'DM Mono';font-size:11px;letter-spacing:.5px;border:none;background:transparent;color:rgba(255,255,255,.5);border-bottom:2px solid transparent;white-space:nowrap;cursor:pointer;transition:all .2s;flex-shrink:0}
+.pt-btn:hover{color:rgba(255,255,255,.8)}
+.pt-btn.active{color:#fff;border-bottom-color:var(--accent2)}
+.tb-right{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0;padding-left:12px}
+.tb-new{padding:6px 14px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:4px;font-family:'DM Mono';font-size:11px;color:#fff;cursor:pointer;white-space:nowrap}
+.tb-new:hover{background:rgba(255,255,255,.18)}
+.tb-avatar{width:30px;height:30px;border-radius:50%;overflow:hidden;cursor:pointer;border:2px solid rgba(255,255,255,.2);flex-shrink:0}
+.tb-avatar img{width:100%;height:100%;object-fit:cover}
+.tb-avatar-placeholder{width:30px;height:30px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'DM Mono';font-size:11px;color:#fff;cursor:pointer;border:2px solid rgba(255,255,255,.2);flex-shrink:0}
+
+/* ── SCREENS ── */
+.screen{display:none;min-height:calc(100vh - 52px)}
+.screen.active{display:block}
+
+/* ── EMPTY ── */
+#screen-empty{display:flex;align-items:center;justify-content:center;padding:40px}
+.empty-box{max-width:400px;text-align:center}
+.empty-icon{font-size:52px;margin-bottom:16px}
+.empty-title{font-family:'Bebas Neue';font-size:38px;letter-spacing:3px;color:var(--ink);margin-bottom:8px}
+.empty-sub{font-family:'DM Mono';font-size:12px;color:var(--ink3);line-height:1.8;margin-bottom:28px}
+
+/* ── WIZARD ── */
+#screen-wizard{display:flex;align-items:flex-start;justify-content:center;padding:40px 20px}
+.wiz-wrap{width:100%;max-width:540px}
+.wiz-back{font-family:'DM Mono';font-size:11px;color:var(--ink3);background:none;border:none;cursor:pointer;margin-bottom:20px;padding:0;display:flex;align-items:center;gap:5px}
+.wiz-progress{display:flex;gap:5px;margin-bottom:28px}
+.wiz-dot{flex:1;height:3px;border-radius:2px;background:var(--border);transition:background .3s}
+.wiz-dot.done{background:var(--accent)}
+.wiz-dot.active{background:var(--accent2)}
+.wiz-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:36px}
+.wiz-title{font-family:'Bebas Neue';font-size:30px;letter-spacing:2px;color:var(--ink);margin-bottom:6px}
+.wiz-sub{font-family:'DM Mono';font-size:12px;color:var(--ink3);margin-bottom:24px;line-height:1.7}
+
+/* ── TYPE GRID ── */
+.type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
+.type-btn{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px 8px;cursor:pointer;text-align:center;transition:all .2s}
+.type-btn:hover{border-color:var(--ink3)}
+.type-btn.active{border-color:var(--accent);background:var(--surface2)}
+.type-btn .te{font-size:22px;margin-bottom:4px}
+.type-btn .tl{font-family:'DM Mono';font-size:11px;color:var(--ink2)}
+
+/* ── FORM ELEMENTS ── */
+.f-group{margin-bottom:16px}
+.f-label{display:block;font-size:10px;letter-spacing:1.5px;color:var(--ink3);text-transform:uppercase;margin-bottom:5px;font-family:'DM Mono'}
+.f-inp{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);font-family:'DM Mono';font-size:13px;color:var(--ink)}
+.f-inp:focus{outline:2px solid var(--accent2);outline-offset:1px}
+.f-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+textarea.f-inp{resize:vertical;min-height:60px;font-family:'DM Sans',sans-serif;font-size:13px}
+.f-hint{font-family:'DM Mono';font-size:10px;color:var(--ink3);margin-top:5px;line-height:1.5}
+.f-hint code{background:var(--surface2);padding:1px 5px;border-radius:3px}
+
+/* ── MEMBER ROWS ── */
+.member-rows{display:flex;flex-direction:column;gap:7px;margin-bottom:10px}
+.member-row{display:flex;gap:8px}
+.member-row .f-inp{flex:1}
+.btn-rm{background:var(--red-bg);border:1px solid #E0C0C0;border-radius:4px;color:var(--red);padding:8px 10px;font-size:14px;line-height:1}
+.btn-add-row{width:100%;padding:9px;background:transparent;border:1.5px dashed var(--border2);border-radius:var(--radius);font-family:'DM Mono';font-size:12px;color:var(--ink3);cursor:pointer}
+.btn-add-row:hover{border-color:var(--ink3);color:var(--ink)}
+
+/* ── CONNECT BLOCKS ── */
+.connect-block{border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px}
+.cb-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.cb-name{font-size:13px;font-weight:500}
+.cb-status{font-family:'DM Mono';font-size:11px;color:var(--ink3)}
+.cb-status.ok{color:var(--green)}
+
+/* ── NAV BUTTONS ── */
+.wiz-nav{display:flex;justify-content:space-between;align-items:center;margin-top:24px;gap:8px}
+.btn-primary{padding:11px 24px;background:var(--accent);color:#FAF5EE;border:none;border-radius:var(--radius);font-family:'DM Mono';font-size:13px;cursor:pointer;transition:background .2s}
+.btn-primary:hover{background:#7A4E1E}
+.btn-primary:disabled{background:var(--border2);cursor:default}
+.btn-secondary{padding:11px 20px;background:transparent;border:1px solid var(--border);border-radius:var(--radius);font-family:'DM Mono';font-size:13px;color:var(--ink3);cursor:pointer}
+.btn-secondary:hover{color:var(--ink);border-color:var(--ink3)}
+.btn-ghost{background:none;border:none;font-family:'DM Mono';font-size:11px;color:var(--ink3);cursor:pointer;text-decoration:underline;padding:0}
+
+/* ── APP LAYOUT ── */
+#screen-app{padding:0}
+.app-header{background:var(--surface);border-bottom:1px solid var(--border);padding:18px 24px 14px}
+.app-header-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.app-title{font-family:'Bebas Neue';font-size:32px;letter-spacing:2px;color:var(--ink);line-height:1}
+.app-type-badge{font-family:'DM Mono';font-size:10px;letter-spacing:1px;color:var(--ink3);margin-top:2px}
+.app-total{text-align:right}
+.app-total-label{font-family:'DM Mono';font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:1px}
+.app-total-val{font-family:'Bebas Neue';font-size:30px;color:var(--ink);letter-spacing:1px}
+.app-total-sub{font-family:'DM Mono';font-size:10px;color:var(--ink3)}
+.role-badge{display:inline-block;padding:2px 8px;border-radius:3px;font-family:'DM Mono';font-size:10px;letter-spacing:.5px;font-weight:500}
+.role-badge.owner{background:var(--surface2);color:var(--accent);border:1px solid var(--border)}
+.role-badge.member{background:var(--blue-bg);color:var(--blue);border:1px solid #C8D8F0}
+
+/* ── TABS ── */
+.app-tabs{display:flex;gap:0;border-bottom:2px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.app-tabs::-webkit-scrollbar{display:none}
+.app-tab{padding:10px 18px;font-family:'DM Mono';font-size:12px;border:none;background:transparent;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap;transition:all .2s}
+.app-tab:hover{color:var(--ink)}
+.app-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:500}
+.tab-content{display:none;padding:24px}
+.tab-content.active{display:block}
+
+/* ── STATS ROW ── */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+.stat-label{font-family:'DM Mono';font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+.stat-val{font-family:'Bebas Neue';font-size:22px;color:var(--ink);letter-spacing:.5px}
+.stat-val.accent{color:var(--accent)}
+
+/* ── BONNETJE CARDS ── */
+.bonnetje-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;overflow:hidden;transition:box-shadow .15s}
+.bonnetje-card:hover{box-shadow:0 2px 12px rgba(42,30,20,.06)}
+.bc-main{display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer}
+.bc-thumbs{display:flex;gap:4px;flex-shrink:0}
+.bc-thumb{width:38px;height:38px;border-radius:4px;border:1px solid var(--border);background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:14px;overflow:hidden}
+.bc-thumb img{width:100%;height:100%;object-fit:cover}
+.bc-body{flex:1;min-width:0}
+.bc-top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.bc-winkel{font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bc-bedrag{font-family:'Bebas Neue';font-size:20px;color:var(--ink);letter-spacing:.5px;flex-shrink:0}
+.bc-retour{font-size:10px;color:var(--ink3);font-family:'DM Mono';text-align:right}
+.bc-meta{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap;align-items:center}
+.bc-chevron{font-size:11px;color:var(--border2);flex-shrink:0}
+.bc-expanded{padding:14px 16px 16px;border-top:1px solid var(--bg);background:var(--bg)}
+.bc-note{padding:8px 12px;background:var(--surface);border-radius:4px;font-family:'DM Sans';font-size:12px;color:var(--ink2);margin-bottom:10px}
+.bc-actions{display:flex;gap:8px}
+.bc-btn{padding:6px 14px;border-radius:4px;font-family:'DM Mono';font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--ink2)}
+.bc-btn.edit{background:var(--surface2);border-color:var(--border2);color:var(--accent)}
+.bc-btn.del{background:var(--red-bg);border-color:#E0C0C0;color:var(--red)}
+
+/* ── BADGE ── */
+.badge{display:inline-block;padding:2px 7px;border-radius:3px;font-family:'DM Mono';font-size:10px;font-weight:500;letter-spacing:.3px}
+
+/* ── BAR ── */
+.bar-wrap{background:var(--bg);border-radius:3px;height:6px;overflow:hidden;margin-top:4px}
+.bar-fill{height:100%;border-radius:3px;transition:width .4s ease}
+
+/* ── ADD BONNETJE ── */
+.add-zone{margin-top:4px;border:2px dashed var(--border2);border-radius:var(--radius);padding:16px;text-align:center;cursor:pointer;font-family:'DM Mono';font-size:13px;color:var(--ink3);transition:all .2s}
+.add-zone:hover{border-color:var(--ink3);color:var(--ink)}
+
+/* ── FORM CARD ── */
+.form-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+.form-card h3{font-family:'Bebas Neue';font-size:20px;letter-spacing:1.5px;color:var(--ink);margin-bottom:18px}
+
+/* ── SPLITS ── */
+.splits-row{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.splits-row select{flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--surface)}
+.splits-row input[type=number]{width:56px;padding:7px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:right;background:var(--surface)}
+.splits-pct-label{font-size:12px;color:var(--ink3)}
+.splits-footer{display:flex;justify-content:space-between;margin-top:6px}
+
+/* ── FOTO ZONE ── */
+.foto-zone{border:2px dashed var(--border2);border-radius:var(--radius);padding:14px;text-align:center;cursor:pointer;color:var(--ink3);font-size:12px;font-family:'DM Mono';transition:all .2s}
+.foto-zone:hover{border-color:var(--ink3);color:var(--ink)}
+.foto-zone.has-foto{border-style:solid;border-color:var(--green);color:var(--green)}
+.foto-preview{width:100%;max-height:100px;object-fit:cover;border-radius:4px;margin-top:8px;display:none}
+
+/* ── OVERZICHT ── */
+.ov-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:20px}
+.ov-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+.ov-emoji{font-size:22px;margin-bottom:6px}
+.ov-label{font-family:'DM Mono';font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+.ov-val{font-family:'Bebas Neue';font-size:20px;color:var(--ink)}
+.ov-count{font-family:'DM Mono';font-size:10px;color:var(--ink3)}
+
+/* ── AFREKENEN ── */
+.afrek-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:36px;text-align:center;margin-bottom:16px}
+.afrek-label{font-family:'Bebas Neue';font-size:14px;letter-spacing:2px;color:var(--ink3);margin-bottom:8px}
+.afrek-big{font-family:'Bebas Neue';font-size:48px;color:var(--accent);letter-spacing:2px}
+.afrek-sub{font-family:'DM Mono';font-size:12px;color:var(--ink3);margin-top:6px}
+
+/* ── TIJDLIJN ── */
+.tl-row{display:flex;gap:16px;margin-bottom:20px}
+.tl-date{width:64px;flex-shrink:0;text-align:right;padding-top:2px}
+.tl-day{font-family:'Bebas Neue';font-size:22px;color:var(--accent);line-height:1}
+.tl-month{font-family:'DM Mono';font-size:10px;color:var(--ink3)}
+.tl-line{display:flex;flex-direction:column;align-items:center}
+.tl-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);margin-top:4px;flex-shrink:0}
+.tl-track{width:2px;flex:1;background:var(--border);margin-top:2px}
+.tl-items{flex:1}
+.tl-running{font-family:'DM Mono';font-size:11px;color:var(--ink3);margin-top:4px}
+
+/* ── INSTELLINGEN ── */
+.settings-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:14px}
+.settings-section h3{font-family:'Bebas Neue';font-size:17px;letter-spacing:1.5px;margin-bottom:14px}
+.setting-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--bg)}
+.setting-row:last-child{border-bottom:none}
+.sr-label{font-size:13px;font-weight:500}
+.sr-sub{font-family:'DM Mono';font-size:11px;color:var(--ink3);margin-top:2px}
+.sr-btn{padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:4px;font-family:'DM Mono';font-size:11px;cursor:pointer;color:var(--ink2)}
+.danger h3{color:var(--red)}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(42,30,20,.45);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto}
+.modal-title{font-family:'Bebas Neue';font-size:22px;letter-spacing:1.5px;margin-bottom:6px}
+.modal-sub{font-family:'DM Mono';font-size:12px;color:var(--ink3);margin-bottom:20px;line-height:1.6}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+
+/* ── SYNC MSG ── */
+#sync-msg{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#FAF5EE;padding:9px 18px;border-radius:20px;font-family:'DM Mono';font-size:12px;z-index:200;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+#sync-msg.show{opacity:1}
+#sync-msg.ok{background:var(--green)}
+#sync-msg.err{background:var(--red)}
+
+/* ── USER MENU ── */
+#user-menu{position:fixed;top:58px;right:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px;min-width:200px;z-index:80;display:none;box-shadow:0 4px 20px rgba(42,30,20,.12)}
+#user-menu.open{display:block}
+.um-name{font-size:13px;font-weight:500;margin-bottom:2px}
+.um-email{font-family:'DM Mono';font-size:11px;color:var(--ink3);margin-bottom:12px}
+.um-btn{width:100%;padding:8px 12px;text-align:left;background:transparent;border:none;border-radius:4px;font-family:'DM Mono';font-size:12px;color:var(--ink2);cursor:pointer}
+.um-btn:hover{background:var(--bg)}
+.um-btn.danger{color:var(--red)}
+
+@media(max-width:540px){
+  .f-row{grid-template-columns:1fr}
+  .stats-row{grid-template-columns:1fr 1fr}
+  .ov-grid{grid-template-columns:1fr 1fr}
+  .wiz-card{padding:24px 20px}
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <div class="tb-logo">🧾</div>
+  <div class="tb-sep"></div>
+  <div id="proj-tabs"></div>
+  <div class="tb-right">
+    <button class="tb-new" id="btn-new-proj">+ Nieuw</button>
+    <div id="tb-avatar-wrap"></div>
+  </div>
+</div>
+
+<!-- USER MENU -->
+<div id="user-menu">
+  <div class="um-name" id="um-name"></div>
+  <div class="um-email" id="um-email"></div>
+  <button class="um-btn" id="um-logout">🚪 Uitloggen</button>
+</div>
+
+<!-- SCREENS -->
+<div class="screen active" id="screen-empty">
+  <div class="empty-box">
+    <div class="empty-icon">🧾</div>
+    <div class="empty-title">WELKOM!</div>
+    <div class="empty-sub">Maak je eerste project aan om bonnetjes bij te houden.<br>Kies een type — klussen, boodschappen, borrel — en nodig deelnemers uit.</div>
+    <button class="btn-primary" id="btn-start-wizard" style="padding:13px 32px;font-size:14px">+ Eerste project aanmaken</button>
+  </div>
+</div>
+
+<div class="screen" id="screen-wizard">
+  <div id="wiz-wrap"></div>
+</div>
+
+<div class="screen" id="screen-app">
+  <div class="app-header">
+    <div class="app-header-top">
+      <div>
+        <div class="app-title" id="app-title">Project</div>
+        <div class="app-type-badge" id="app-type-badge"></div>
+      </div>
+      <div class="app-total">
+        <div class="app-total-label">Netto totaal</div>
+        <div class="app-total-val" id="app-total">€ 0,00</div>
+        <div class="app-total-sub" id="app-count">0 bonnetjes</div>
+      </div>
+    </div>
+    <div class="app-tabs" id="app-tabs">
+      <button class="app-tab active" data-tab="invoer">Invoer</button>
+      <button class="app-tab" data-tab="bonnetjes">Bonnetjes</button>
+      <button class="app-tab" data-tab="overzicht">Overzicht</button>
+      <button class="app-tab" data-tab="afrekenen">Afrekenen</button>
+      <button class="app-tab" data-tab="tijdlijn">Tijdlijn</button>
+      <button class="app-tab" data-tab="instellingen" id="tab-instellingen-btn">Instellingen</button>
+    </div>
+  </div>
+
+  <div class="tab-content active" id="tab-invoer"></div>
+  <div class="tab-content" id="tab-bonnetjes"></div>
+  <div class="tab-content" id="tab-overzicht"></div>
+  <div class="tab-content" id="tab-afrekenen"></div>
+  <div class="tab-content" id="tab-tijdlijn"></div>
+  <div class="tab-content" id="tab-instellingen"></div>
+</div>
+
+<!-- SYNC MSG -->
+<div id="sync-msg"></div>
+
+<script type="module">
+import {
+  onAuth, logout, getCurrentUserDoc, getGoogleToken,
+  getMyProjects, createProject, updateProject, deleteProject,
+  listenBonnetjes, addBonnetje, updateBonnetje, deleteBonnetje,
+  getProjectTypes, CATEGORIES_BY_TYPE, DEFAULT_PROJECT_TYPES,
+  uploadToDrive, appendToSheet, exportCSV
+} from './firebase.js';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════════════════
+let currentUser     = null;
+let currentUserDoc  = null;
+let projects        = [];
+let currentProject  = null;
+let bonnetjes       = [];
+let projectTypes    = DEFAULT_PROJECT_TYPES;
+let unsubBonnetjes  = null;
+let editingBonnetje = null;
+let expandedId      = null;
+let activeFilter    = 'all';
+let activeCatFilter = 'all';
+
+const MONTHS = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+const fmt    = n => new Intl.NumberFormat("nl-NL",{style:"currency",currency:"EUR"}).format(n||0);
+const netto  = b => (parseFloat(b.bedrag)||0) - (parseFloat(b.retour)||0);
+const fmtD   = d => d ? d.slice(8)+" "+MONTHS[parseInt(d.slice(5,7))-1] : "";
+const genId  = () => Math.random().toString(36).slice(2,9);
+const escH   = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════════════════════════════════════
+onAuth(async user => {
+  if (!user) { window.location.href = './index.html'; return; }
+  currentUser    = user;
+  currentUserDoc = await getCurrentUserDoc();
+
+  if (currentUserDoc?.blocked) {
+    document.body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:'DM Mono';font-size:13px;color:#8B1A1A">Je account is geblokkeerd.</div>`;
+    return;
+  }
+
+  projectTypes = await getProjectTypes();
+  renderAvatar();
+  await loadProjects();
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AVATAR & USER MENU
+// ══════════════════════════════════════════════════════════════════════════════
+function renderAvatar() {
+  const wrap = document.getElementById('tb-avatar-wrap');
+  if (currentUser.photoURL) {
+    wrap.innerHTML = `<div class="tb-avatar" id="tb-avatar"><img src="${escH(currentUser.photoURL)}" alt=""/></div>`;
+  } else {
+    const initials = (currentUser.displayName||currentUser.email||'?')[0].toUpperCase();
+    wrap.innerHTML = `<div class="tb-avatar-placeholder" id="tb-avatar">${initials}</div>`;
+  }
+  document.getElementById('tb-avatar').onclick = toggleUserMenu;
+  document.getElementById('um-name').textContent  = currentUser.displayName || 'Gebruiker';
+  document.getElementById('um-email').textContent = currentUser.email;
+  document.getElementById('um-logout').onclick = async () => { await logout(); window.location.href = './index.html'; };
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#user-menu') && !e.target.closest('#tb-avatar')) {
+      document.getElementById('user-menu').classList.remove('open');
+    }
+  });
+}
+function toggleUserMenu() { document.getElementById('user-menu').classList.toggle('open'); }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PROJECTS
+// ══════════════════════════════════════════════════════════════════════════════
+async function loadProjects() {
+  projects = await getMyProjects();
+  renderProjectTabs();
+  if (projects.length === 0) {
+    showScreen('empty');
+  } else {
+    const lastId = localStorage.getItem('bt_last_project');
+    const target = projects.find(p => p.id === lastId) || projects[0];
+    openProject(target);
+  }
+}
+
+function renderProjectTabs() {
+  const tabs = document.getElementById('proj-tabs');
+  tabs.innerHTML = '';
+  projects.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'pt-btn' + (currentProject?.id === p.id ? ' active' : '');
+    btn.textContent = `${getTypeEmoji(p.type)} ${p.name}`;
+    btn.onclick = () => openProject(p);
+    tabs.appendChild(btn);
+  });
+}
+
+function getTypeEmoji(typeId) {
+  return projectTypes.find(t => t.id === typeId)?.emoji || '📦';
+}
+
+function openProject(project) {
+  currentProject = project;
+  localStorage.setItem('bt_last_project', project.id);
+  renderProjectTabs();
+
+  // Bepaal rol in dit project
+  const isOwner = project.ownerUid === currentUser.uid;
+
+  // Header
+  document.getElementById('app-title').textContent = project.name;
+  const typeInfo = projectTypes.find(t => t.id === project.type);
+  document.getElementById('app-type-badge').textContent =
+    `${typeInfo?.emoji || ''} ${typeInfo?.label || project.type} · ${isOwner ? 'Eigenaar' : 'Deelnemer'}`;
+
+  // Instellingen tab alleen voor eigenaar
+  document.getElementById('tab-instellingen-btn').style.display = isOwner ? '' : 'none';
+
+  showScreen('app');
+  setActiveTab('invoer');
+
+  // Live listener
+  if (unsubBonnetjes) unsubBonnetjes();
+  unsubBonnetjes = listenBonnetjes(project.id, data => {
+    bonnetjes = data;
+    updateHeader();
+    renderActiveTab();
+  });
+}
+
+function updateHeader() {
+  const totaal = bonnetjes.reduce((s,b) => s + netto(b), 0);
+  document.getElementById('app-total').textContent = fmt(totaal);
+  document.getElementById('app-count').textContent = `${bonnetjes.length} bonnetje${bonnetjes.length !== 1 ? 's' : ''}`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SCREENS & TABS
+// ══════════════════════════════════════════════════════════════════════════════
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById('screen-' + name);
+  if (el) el.classList.add('active');
+}
+
+function setActiveTab(name) {
+  document.querySelectorAll('.app-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.id === 'tab-' + name));
+  renderTab(name);
+}
+
+function renderActiveTab() {
+  const active = document.querySelector('.app-tab.active');
+  if (active) renderTab(active.dataset.tab);
+}
+
+function renderTab(name) {
+  if (name === 'invoer')      renderInvoer();
+  if (name === 'bonnetjes')   renderBonnetjesTab();
+  if (name === 'overzicht')   renderOverzicht();
+  if (name === 'afrekenen')   renderAfrekenen();
+  if (name === 'tijdlijn')    renderTijdlijn();
+  if (name === 'instellingen') renderInstellingen();
+}
+
+document.querySelectorAll('.app-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    editingBonnetje = null;
+    setActiveTab(btn.dataset.tab);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INVOER TAB
+// ══════════════════════════════════════════════════════════════════════════════
+let formState = null;
+let fotoBase64 = null, prodBase64 = null;
+
+function makeEmpty() {
+  const cats = CATEGORIES_BY_TYPE[currentProject?.type] || CATEGORIES_BY_TYPE.overig;
+  return {
+    winkel:'', locatie:'',
+    splits:[{ catId: cats[0]?.id || 'overig', pct: 100 }],
+    persoon: currentProject?.members?.[0]?.name || currentUser.displayName || '',
+    datum: new Date().toISOString().slice(0,10),
+    bedrag:'', retour:'', garantie:'', notitie:'',
+    status:'actief', fotoUrl:null, productFotoUrl:null
+  };
+}
+
+function renderInvoer() {
+  if (!formState) formState = makeEmpty();
+  const el = document.getElementById('tab-invoer');
+  const cats = CATEGORIES_BY_TYPE[currentProject?.type] || CATEGORIES_BY_TYPE.overig;
+  const members = currentProject?.members || [];
+  const splitsTotal = (formState.splits||[]).reduce((s,x) => s+(x.pct||0), 0);
+  const splitsOk = Math.abs(splitsTotal-100) < 0.5;
+  const isOwner = currentProject?.ownerUid === currentUser.uid;
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:20px;max-width:900px">
+      <div>
+        ${editingBonnetje ? `<div class="form-card" id="edit-form-wrap"></div>` : ''}
+        ${!editingBonnetje ? buildFormHTML(cats, members, splitsOk) : ''}
+      </div>
+      <div>
+        <div class="form-card">
+          <h3>RECENT</h3>
+          <div id="recent-list">${buildRecentHTML()}</div>
+        </div>
+        ${isOwner ? `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-secondary" onclick="doExportCSV()" style="font-size:11px;padding:8px 14px">↓ CSV</button>
+          <button class="btn-secondary" onclick="openDriveFolder()" style="font-size:11px;padding:8px 14px">📁 Drive map</button>
+        </div>` : ''}
+      </div>
+    </div>`;
+
+  if (editingBonnetje) {
+    document.getElementById('edit-form-wrap').innerHTML = buildFormHTML(cats, members, splitsOk, true);
+  }
+
+  bindFormEvents(cats);
+}
+
+function buildFormHTML(cats, members, splitsOk, isEdit=false) {
+  const f = formState;
+  return `
+    <div class="form-card" id="main-form">
+      <h3>${isEdit ? '✏ BEWERKEN' : '+ NIEUW BONNETJE'}</h3>
+
+      <div class="f-group">
+        <label class="f-label">${currentProject?.folderId ? '📄 Foto bonnetje → Drive' : '📄 Foto bonnetje'}</label>
+        <div class="foto-zone ${f.fotoUrl?'has-foto':''}" id="foto-zone" onclick="document.getElementById('foto-inp').click()">
+          <div id="foto-zone-txt">${f.fotoUrl ? '✓ Foto opgeslagen' : '📷 Tik om foto toe te voegen'}</div>
+          <img id="foto-preview" class="foto-preview" ${f.fotoUrl?`src="${escH(f.fotoUrl)}" style="display:block"`:''}/>
+        </div>
+        <input type="file" id="foto-inp" accept="image/*" capture="environment" style="display:none" onchange="handleFoto(this,'receipt')"/>
+      </div>
+
+      <div class="f-row">
+        <div class="f-group"><label class="f-label">Winkel</label>
+          <input class="f-inp" id="f-winkel" type="text" value="${escH(f.winkel)}" placeholder="bijv. Gamma"/></div>
+        <div class="f-group"><label class="f-label">Locatie</label>
+          <input class="f-inp" id="f-locatie" type="text" value="${escH(f.locatie||'')}" placeholder="bijv. Amsterdam"/></div>
+      </div>
+
+      <div class="f-group">
+        <label class="f-label">Categorieën & verdeling</label>
+        <div id="splits-editor"></div>
+      </div>
+
+      <div class="f-row">
+        <div class="f-group"><label class="f-label">Betaald door</label>
+          <select class="f-inp" id="f-persoon">
+            ${[...new Set([...members.map(m=>m.name||m.email), currentUser.displayName||currentUser.email])].map(p =>
+              `<option value="${escH(p)}" ${f.persoon===p?'selected':''}>${escH(p)}</option>`).join('')}
+          </select></div>
+        <div class="f-group"><label class="f-label">Status</label>
+          <select class="f-inp" id="f-status">
+            ${['actief','deels retour','volledig retour'].map(s =>
+              `<option value="${s}" ${f.status===s?'selected':''}>${s}</option>`).join('')}
+          </select></div>
+      </div>
+
+      <div class="f-row">
+        <div class="f-group"><label class="f-label">Bedrag (€)</label>
+          <input class="f-inp" id="f-bedrag" type="number" step="0.01" value="${f.bedrag||''}" placeholder="0,00"/></div>
+        <div class="f-group"><label class="f-label">Retour (€)</label>
+          <input class="f-inp" id="f-retour" type="number" step="0.01" value="${f.retour||''}" placeholder="0,00"/></div>
+      </div>
+
+      <div class="f-row">
+        <div class="f-group"><label class="f-label">Datum</label>
+          <input class="f-inp" id="f-datum" type="date" value="${f.datum||''}"/></div>
+        <div class="f-group"><label class="f-label">Garantie tot</label>
+          <input class="f-inp" id="f-garantie" type="date" value="${f.garantie||''}"/></div>
+      </div>
+
+      <div class="f-group"><label class="f-label">Notitie</label>
+        <textarea class="f-inp" id="f-notitie" rows="2" placeholder="Extra info…">${escH(f.notitie||'')}</textarea></div>
+
+      <div class="f-group">
+        <label class="f-label">📦 Foto product</label>
+        <div class="foto-zone ${f.productFotoUrl?'has-foto':''}" id="prod-zone" onclick="document.getElementById('prod-inp').click()">
+          <div id="prod-zone-txt">${f.productFotoUrl ? '✓ Productfoto opgeslagen' : '📦 Tik om productfoto toe te voegen'}</div>
+          <img id="prod-preview" class="foto-preview" ${f.productFotoUrl?`src="${escH(f.productFotoUrl)}" style="display:block"`:''}/>
+        </div>
+        <input type="file" id="prod-inp" accept="image/*" style="display:none" onchange="handleFoto(this,'product')"/>
+      </div>
+
+      ${!splitsOk ? `<div style="padding:8px 12px;background:var(--yellow-bg);border:1px solid #E8D88A;border-radius:4px;font-family:'DM Mono';font-size:11px;color:var(--yellow);margin-bottom:10px">⚠ Categorieën moeten optellen tot 100%</div>` : ''}
+
+      <div style="display:flex;gap:10px;margin-top:4px">
+        <button class="btn-primary" id="btn-save-bonnetje" ${!splitsOk?'disabled':''}>
+          ${editingBonnetje ? 'Opslaan' : '💾 Bonnetje opslaan'}
+        </button>
+        ${isEdit ? `<button class="btn-secondary" id="btn-cancel-edit">Annuleren</button>` : ''}
+      </div>
+    </div>`;
+}
+
+function buildRecentHTML() {
+  const cats = CATEGORIES_BY_TYPE[currentProject?.type] || CATEGORIES_BY_TYPE.overig;
+  const recent = bonnetjes.slice(0,5);
+  if (!recent.length) return `<div style="font-family:'DM Mono';font-size:12px;color:var(--ink3);padding:8px 0">Nog geen bonnetjes.</div>`;
+  return recent.map(b => {
+    const cat = cats.find(c => c.id === b.splits?.[0]?.catId);
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bg)">
+      <div>
+        <div style="font-size:13px;font-weight:500">${escH(b.winkel||'?')}</div>
+        <div style="font-family:'DM Mono';font-size:10px;color:var(--ink3)">${cat?.emoji||'📦'} ${fmtD(b.datum)}</div>
+      </div>
+      <div style="font-family:'Bebas Neue';font-size:17px;color:var(--accent)">${fmt(netto(b))}</div>
+    </div>`;
+  }).join('');
+}
+
+function bindFormEvents(cats) {
+  // Splits editor
+  renderSplitsEditor(cats);
+
+  // Foto handlers al via onchange attrs
+
+  const saveBtn = document.getElementById('btn-save-bonnetje');
+  if (saveBtn) saveBtn.onclick = doSaveBonnetje;
+
+  const cancelBtn = document.getElementById('btn-cancel-edit');
+  if (cancelBtn) cancelBtn.onclick = () => { editingBonnetje = null; formState = makeEmpty(); renderInvoer(); };
+
+  // Live form updates
+  ['winkel','locatie','bedrag','retour','datum','garantie','notitie','persoon','status'].forEach(id => {
+    const el = document.getElementById('f-'+id);
+    if (el) el.addEventListener('input', e => { formState[id] = e.target.value; });
+    if (el && el.tagName === 'SELECT') el.addEventListener('change', e => { formState[id] = e.target.value; });
+  });
+}
+
+function renderSplitsEditor(cats) {
+  const el = document.getElementById('splits-editor');
+  if (!el) return;
+  const splits = formState.splits || [];
+  const total  = splits.reduce((s,x) => s+(x.pct||0), 0);
+  const ok     = Math.abs(total-100) < 0.5;
+
+  let html = splits.map((s,i) => `
+    <div class="splits-row">
+      <select onchange="updateSplit(${i},'catId',this.value)">
+        ${cats.map(c => `<option value="${c.id}" ${c.id===s.catId?'selected':''}>${c.emoji} ${c.label}</option>`).join('')}
+      </select>
+      <input type="number" min="0" max="100" value="${s.pct}" onchange="updateSplit(${i},'pct',parseFloat(this.value)||0)"/>
+      <span class="splits-pct-label">%</span>
+      ${splits.length>1 ? `<button class="btn-rm" onclick="removeSplit(${i})">×</button>` : ''}
+    </div>`).join('');
+
+  html += `<div class="splits-footer">
+    <button class="btn-ghost" onclick="addSplit()">+ Nog een categorie</button>
+    <span style="font-family:'DM Mono';font-size:11px;color:${ok?'var(--green)':'var(--red)'}">${ok?'✓ 100%':total.toFixed(0)+'% — moet 100%'}</span>
+  </div>`;
+  el.innerHTML = html;
+}
+
+window.updateSplit = (i, key, val) => { formState.splits[i][key] = val; renderSplitsEditor(CATEGORIES_BY_TYPE[currentProject?.type]||CATEGORIES_BY_TYPE.overig); };
+window.removeSplit = i => { formState.splits.splice(i,1); renderSplitsEditor(CATEGORIES_BY_TYPE[currentProject?.type]||CATEGORIES_BY_TYPE.overig); };
+window.addSplit    = () => {
+  const cats  = CATEGORIES_BY_TYPE[currentProject?.type]||CATEGORIES_BY_TYPE.overig;
+  const total = formState.splits.reduce((s,x)=>s+(x.pct||0),0);
+  formState.splits.push({ catId: cats[0]?.id, pct: Math.max(0,100-total) });
+  renderSplitsEditor(cats);
+};
+
+window.handleFoto = async (input, type) => {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const base64 = e.target.result;
+    if (type === 'receipt') { fotoBase64 = base64; updateFotoZone('foto', base64); }
+    else { prodBase64 = base64; updateFotoZone('prod', base64); }
+  };
+  reader.readAsDataURL(file);
+};
+
+function updateFotoZone(type, base64) {
+  const zone    = document.getElementById(type+'-zone');
+  const txt     = document.getElementById(type+'-zone-txt');
+  const preview = document.getElementById(type+'-preview');
+  if (zone)    zone.classList.add('has-foto');
+  if (txt)     txt.textContent = '✓ Klaar om te uploaden';
+  if (preview) { preview.src = base64; preview.style.display = 'block'; }
+}
+
+async function doSaveBonnetje() {
+  const btn = document.getElementById('btn-save-bonnetje');
+  if (btn) btn.disabled = true;
+  syncMsg('⏳ Opslaan…');
+
+  try {
+    // Sync form values
+    ['winkel','locatie','bedrag','retour','datum','garantie','notitie','persoon','status'].forEach(id => {
+      const el = document.getElementById('f-'+id);
+      if (el) formState[id] = el.value;
+    });
+
+    const pid    = currentProject.id;
+    const cats   = CATEGORIES_BY_TYPE[currentProject.type] || CATEGORIES_BY_TYPE.overig;
+    const datum  = formState.datum.replace(/-/g,'');
+    const winkel = (formState.winkel||'onbekend').replace(/[^a-zA-Z0-9]/g,'');
+
+    // Drive uploads
+    if (fotoBase64 && currentProject.folderId) {
+      syncMsg('⏳ Foto uploaden naar Drive…');
+      const catNaam = (cats.find(c=>c.id===formState.splits?.[0]?.catId)?.label||'overig').replace(/[^a-zA-Z0-9]/g,'');
+      const res = await uploadToDrive(fotoBase64, `${datum}_${winkel}_${catNaam}_bonnetje.jpg`, currentProject.folderId);
+      formState.fotoUrl = res.url;
+      fotoBase64 = null;
+    }
+    if (prodBase64 && currentProject.folderId) {
+      const catNaam = (cats.find(c=>c.id===formState.splits?.[0]?.catId)?.label||'overig').replace(/[^a-zA-Z0-9]/g,'');
+      const res = await uploadToDrive(prodBase64, `${datum}_${winkel}_${catNaam}_product.jpg`, currentProject.folderId);
+      formState.productFotoUrl = res.url;
+      prodBase64 = null;
+    }
+
+    const data = {
+      winkel:         formState.winkel,
+      locatie:        formState.locatie||'',
+      splits:         formState.splits,
+      persoon:        formState.persoon,
+      datum:          formState.datum,
+      bedrag:         parseFloat(formState.bedrag)||0,
+      retour:         parseFloat(formState.retour)||0,
+      garantie:       formState.garantie||'',
+      notitie:        formState.notitie||'',
+      status:         formState.status,
+      fotoUrl:        formState.fotoUrl||null,
+      productFotoUrl: formState.productFotoUrl||null,
+    };
+
+    if (editingBonnetje) {
+      await updateBonnetje(pid, editingBonnetje.id, data);
+      editingBonnetje = null;
+    } else {
+      const bid = await addBonnetje(pid, data);
+      // Sheets sync
+      if (currentProject.sheetId) appendToSheet(currentProject.sheetId, {...data, id:bid}, cats).catch(()=>{});
+    }
+
+    formState = makeEmpty();
+    fotoBase64 = null; prodBase64 = null;
+    syncMsg('✓ Opgeslagen', 'ok');
+    renderInvoer();
+  } catch(e) {
+    syncMsg('⚠ Opslaan mislukt: ' + e.message, 'err');
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BONNETJES TAB
+// ══════════════════════════════════════════════════════════════════════════════
+function renderBonnetjesTab() {
+  const el   = document.getElementById('tab-bonnetjes');
+  const cats = CATEGORIES_BY_TYPE[currentProject?.type] || CATEGORIES_BY_TYPE.overig;
+  const members = [...new Set(bonnetjes.map(b=>b.persoon).filter(Boolean))];
+
+  let filtered = bonnetjes.filter(b => {
+    if (activeFilter !== 'all' && b.persoon !== activeFilter) return false;
+    if (activeCatFilter !== 'all' && !(b.splits||[]).find(s=>s.catId===activeCatFilter)) return false;
+    return true;
+  });
+
+  el.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+      ${['all',...members].map(p => `<button onclick="setFilter('${escH(p)}')" style="padding:5px 14px;border-radius:3px;font-family:'DM Mono';font-size:11px;border:1px solid ${activeFilter===p?'var(--accent)':'var(--border)'};background:${activeFilter===p?'var(--surface2)':'transparent'};color:${activeFilter===p?'var(--accent)':'var(--ink3)'};cursor:pointer">${p==='all'?'Iedereen':escH(p)}</button>`).join('')}
+      <select onchange="setCatFilter(this.value)" style="padding:5px 10px;border-radius:3px;border:1px solid var(--border);font-family:'DM Mono';font-size:11px;background:var(--bg)">
+        <option value="all">Alle categorieën</option>
+        ${cats.map(c=>`<option value="${c.id}" ${activeCatFilter===c.id?'selected':''}>${c.emoji} ${c.label}</option>`).join('')}
+      </select>
+    </div>
+    <div id="bonnetjes-list">${filtered.length ? filtered.map(b=>buildBonnetjeCardHTML(b,cats)).join('') : '<div style="text-align:center;padding:40px;font-family:\'DM Mono\';font-size:13px;color:var(--ink3)">Geen bonnetjes.</div>'}</div>
+    <div class="add-zone" onclick="switchToInvoer()">+ Nieuw bonnetje toevoegen</div>`;
+}
+
+function buildBonnetjeCardHTML(b, cats) {
+  const mainCat  = cats.find(c => c.id === b.splits?.[0]?.catId);
+  const isExp    = expandedId === b.id;
+  const statusC  = b.status==='actief'?'var(--green)':b.status==='deels retour'?'var(--yellow)':'var(--red)';
+  const statusBg = b.status==='actief'?'var(--green-bg)':b.status==='deels retour'?'var(--yellow-bg)':'var(--red-bg)';
+  const driveUrl = b.fotoUrl ? b.fotoUrl.replace('drive.google.com/uc?id=', 'lh3.googleusercontent.com/d/') : null;
+
+  return `<div class="bonnetje-card" style="border-left:4px solid ${mainCat?.color||'var(--border)'}">
+    <div class="bc-main" onclick="toggleExpand('${b.id}')">
+      <div class="bc-thumbs">
+        <div class="bc-thumb">${driveUrl ? `<img src="${escH(driveUrl)}" onerror="this.style.display='none'" alt=""/>` : '🧾'}</div>
+        <div class="bc-thumb">${b.productFotoUrl ? `<img src="${escH(b.productFotoUrl.replace('drive.google.com/uc?id=','lh3.googleusercontent.com/d/'))}" onerror="this.style.display='none'" alt=""/>` : '📦'}</div>
+      </div>
+      <div class="bc-body">
+        <div class="bc-top">
+          <span class="bc-winkel">${escH(b.winkel||'?')}</span>
+          <span class="bc-bedrag">${fmt(netto(b))}</span>
+        </div>
+        <div class="bc-meta">
+          <span class="badge" style="color:${mainCat?.color||'#888'};background:${(mainCat?.color||'#888')}18">${mainCat?.emoji||'📦'} ${mainCat?.label||''}</span>
+          <span class="badge" style="color:${statusC};background:${statusBg}">${b.status}</span>
+          <span style="font-family:'DM Mono';font-size:10px;color:var(--ink3)">${escH(b.persoon||'')} · ${fmtD(b.datum)}</span>
+          ${parseFloat(b.retour)>0 ? `<span style="font-family:'DM Mono';font-size:10px;color:var(--ink3)">retour: ${fmt(b.retour)}</span>` : ''}
+          ${b.garantie ? `<span style="font-family:'DM Mono';font-size:10px;color:var(--green);background:var(--green-bg);padding:1px 5px;border-radius:2px">garantie t/m ${fmtD(b.garantie)}</span>` : ''}
+        </div>
+      </div>
+      <span class="bc-chevron">${isExp?'▲':'▼'}</span>
+    </div>
+    ${isExp ? `<div class="bc-expanded">
+      ${b.notitie ? `<div class="bc-note">💬 ${escH(b.notitie)}</div>` : ''}
+      ${b.fotoUrl ? `<div style="margin-bottom:10px"><a href="${escH(b.fotoUrl)}" target="_blank" style="font-family:'DM Mono';font-size:11px;color:var(--accent)">📄 Bonnetje in Drive bekijken →</a></div>` : ''}
+      <div class="bc-actions">
+        <button class="bc-btn edit" onclick="editBonnetje('${b.id}')">✏ Bewerken</button>
+        <button class="bc-btn del" onclick="doDelete('${b.id}')">🗑 Verwijderen</button>
+      </div>
+    </div>` : ''}
+  </div>`;
+}
+
+window.toggleExpand  = id => { expandedId = expandedId===id ? null : id; renderBonnetjesTab(); };
+window.setFilter     = f  => { activeFilter = f; renderBonnetjesTab(); };
+window.setCatFilter  = f  => { activeCatFilter = f; renderBonnetjesTab(); };
+window.switchToInvoer = () => setActiveTab('invoer');
+
+window.editBonnetje = id => {
+  const b = bonnetjes.find(x => x.id===id);
+  if (!b) return;
+  editingBonnetje = b;
+  formState = { ...b, bedrag: String(b.bedrag||''), retour: String(b.retour||'') };
+  setActiveTab('invoer');
+};
+
+window.doDelete = async id => {
+  if (!confirm('Bonnetje verwijderen?')) return;
+  syncMsg('⏳ Verwijderen…');
+  try {
+    await deleteBonnetje(currentProject.id, id);
+    syncMsg('✓ Verwijderd', 'ok');
+  } catch { syncMsg('⚠ Mislukt', 'err'); }
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// OVERZICHT TAB
+// ══════════════════════════════════════════════════════════════════════════════
+function renderOverzicht() {
+  const el   = document.getElementById('tab-overzicht');
+  const cats = CATEGORIES_BY_TYPE[currentProject?.type] || CATEGORIES_BY_TYPE.overig;
+  const members = [...new Set(bonnetjes.map(b=>b.persoon).filter(Boolean))];
+
+  const totBruto  = bonnetjes.reduce((s,b)=>s+(parseFloat(b.bedrag)||0),0);
+  const totRetour = bonnetjes.reduce((s,b)=>s+(parseFloat(b.retour)||0),0);
+  const totNetto  = totBruto - totRetour;
+
+  const perCat = cats.reduce((acc,c) => {
+    acc[c.id] = bonnetjes.reduce((s,b) => {
+      const sp = (b.splits||[]).find(x=>x.catId===c.id);
+      return s + (sp ? netto(b)*(sp.pct/100) : 0);
+    }, 0);
+    return acc;
+  }, {});
+
+  const perPersoon = members.reduce((acc,p) => {
+    acc[p] = bonnetjes.filter(b=>b.persoon===p).reduce((s,b)=>s+netto(b),0);
+    return acc;
+  }, {});
+
+  const winkels = [...new Set(bonnetjes.map(b=>b.winkel).filter(Boolean))].sort();
+
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:16px;max-width:800px">
+
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-label">Bruto</div><div class="stat-val">${fmt(totBruto)}</div></div>
+        <div class="stat-card"><div class="stat-label">Retour</div><div class="stat-val" style="color:var(--green)">${fmt(totRetour)}</div></div>
+        <div class="stat-card"><div class="stat-label">Netto</div><div class="stat-val accent">${fmt(totNetto)}</div></div>
+        <div class="stat-card"><div class="stat-label">Bonnetjes</div><div class="stat-val">${bonnetjes.length}</div></div>
+      </div>
+
+      <div class="form-card">
+        <h3>PER CATEGORIE</h3>
+        ${cats.map(c => {
+          const v = perCat[c.id]||0;
+          const pct = totNetto>0 ? Math.min((v/totNetto)*100,100) : 0;
+          const cnt = bonnetjes.filter(b=>(b.splits||[]).find(s=>s.catId===c.id)).length;
+          return `<div style="margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+              <span style="font-size:13px">${c.emoji} ${c.label}</span>
+              <div style="font-family:'DM Mono';font-size:12px">
+                <span style="font-weight:500">${fmt(v)}</span>
+                <span style="color:var(--ink3)"> · ${cnt}×</span>
+              </div>
+            </div>
+            <div class="bar-wrap"><div class="bar-fill" style="width:${pct}%;background:${c.color}"></div></div>
+          </div>`;
+        }).join('')}
+      </div>
+
+      ${members.length > 0 ? `<div class="form-card">
+        <h3>PER PERSOON</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:8px">
+          ${members.map(p => {
+            const v = perPersoon[p]||0;
+            const pct = totNetto>0 ? (v/totNetto)*100 : 0;
+            return `<div style="background:var(--bg);border-radius:var(--radius);padding:14px">
+              <div style="font-weight:500;margin-bottom:4px">${escH(p)}</div>
+              <div style="font-family:'Bebas Neue';font-size:24px;color:var(--accent)">${fmt(v)}</div>
+              <div style="font-family:'DM Mono';font-size:10px;color:var(--ink3)">${pct.toFixed(0)}% van totaal</div>
+              <div class="bar-wrap" style="margin-top:6px"><div class="bar-fill" style="width:${pct}%;background:var(--accent)"></div></div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : ''}
+
+      ${winkels.length > 0 ? `<div class="form-card">
+        <h3>PER WINKEL</h3>
+        ${winkels.map(w => {
+          const v = bonnetjes.filter(b=>b.winkel===w).reduce((s,b)=>s+netto(b),0);
+          const cnt = bonnetjes.filter(b=>b.winkel===w).length;
+          return `<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--bg)">
+            <span style="font-size:13px">${escH(w)}</span>
+            <div style="font-family:'DM Mono';font-size:12px"><span style="font-family:'Bebas Neue';font-size:17px;color:var(--accent)">${fmt(v)}</span> <span style="color:var(--ink3)">(${cnt}×)</span></div>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AFREKENEN TAB
+// ══════════════════════════════════════════════════════════════════════════════
+function renderAfrekenen() {
+  const el      = document.getElementById('tab-afrekenen');
+  const members = [...new Set(bonnetjes.map(b=>b.persoon).filter(Boolean))];
+  const totaal  = bonnetjes.reduce((s,b)=>s+netto(b),0);
+  const pp      = members.reduce((acc,p) => { acc[p]=bonnetjes.filter(b=>b.persoon===p).reduce((s,b)=>s+netto(b),0); return acc; },{});
+  const fair    = members.length > 0 ? totaal/members.length : 0;
+
+  let verdeling = '';
+  if (members.length === 2) {
+    const [a,b2] = members;
+    const diff = pp[a] - pp[b2];
+    if (Math.abs(diff) < 0.01) {
+      verdeling = `<div class="afrek-card"><div class="afrek-label">EINDAFREKENING</div><div class="afrek-big" style="color:var(--green)">✓ QUITTE!</div><div class="afrek-sub">Jullie hebben precies gelijk betaald.</div></div>`;
+    } else {
+      const betaler = diff > 0 ? b2 : a;
+      const ontvanger = diff > 0 ? a : b2;
+      verdeling = `<div class="afrek-card"><div class="afrek-label">EINDAFREKENING</div>
+        <div style="font-family:'Bebas Neue';font-size:22px;color:var(--ink);margin-bottom:4px">${escH(betaler)} betaalt ${escH(ontvanger)}</div>
+        <div class="afrek-big">${fmt(Math.abs(diff)/2)}</div>
+        <div class="afrek-sub">om de kosten gelijk te verdelen</div></div>`;
+    }
+  } else if (members.length > 2) {
+    const transactions = [];
+    const balances = {...pp};
+    members.forEach(m => { balances[m] -= fair; });
+    const creditors = members.filter(m=>balances[m]>0.01).sort((a,b)=>balances[b]-balances[a]);
+    const debtors   = members.filter(m=>balances[m]<-0.01).sort((a,b)=>balances[a]-balances[b]);
+    let ci=0, di=0;
+    while(ci<creditors.length && di<debtors.length) {
+      const amount = Math.min(balances[creditors[ci]], -balances[debtors[di]]);
+      transactions.push({ from:debtors[di], to:creditors[ci], amount });
+      balances[creditors[ci]] -= amount;
+      balances[debtors[di]]   += amount;
+      if (Math.abs(balances[creditors[ci]])<0.01) ci++;
+      if (Math.abs(balances[debtors[di]])<0.01) di++;
+    }
+    verdeling = `<div class="afrek-card"><div class="afrek-label">EINDAFREKENING</div>
+      ${transactions.length === 0
+        ? `<div class="afrek-big" style="color:var(--green)">✓ QUITTE!</div>`
+        : transactions.map(t=>`<div style="margin-bottom:12px">
+            <div style="font-family:'Bebas Neue';font-size:20px;color:var(--ink)">${escH(t.from)} → ${escH(t.to)}</div>
+            <div class="afrek-big" style="font-size:36px">${fmt(t.amount)}</div>
+          </div>`).join('')}
+    </div>`;
+  } else {
+    verdeling = `<div class="afrek-card"><div class="afrek-label">EINDAFREKENING</div><div style="font-family:'DM Mono';font-size:13px;color:var(--ink3)">Voeg bonnetjes toe om af te rekenen.</div></div>`;
+  }
+
+  el.innerHTML = `
+    <div style="max-width:600px">
+      ${verdeling}
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:4px">
+        ${members.map(p => {
+          const v    = pp[p]||0;
+          const diff = v - fair;
+          return `<div class="form-card" style="padding:16px">
+            <div style="font-weight:500;margin-bottom:4px">${escH(p)}</div>
+            <div style="font-family:'Bebas Neue';font-size:26px;color:var(--ink)">${fmt(v)}</div>
+            <div style="font-family:'DM Mono';font-size:10px;color:var(--ink3);margin-top:2px">eerlijk: ${fmt(fair)}</div>
+            <div style="font-family:'DM Mono';font-size:11px;color:${diff>0?'var(--green)':'var(--red)'};margin-top:2px">
+              ${diff>0?'▲ te veel':'▼ te weinig'}: ${fmt(Math.abs(diff))}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TIJDLIJN TAB
+// ══════════════════════════════════════════════════════════════════════════════
+function renderTijdlijn() {
+  const el   = document.getElementById('tab-tijdlijn');
+  const cats = CATEGORIES_BY_TYPE[currentProject?.type] || CATEGORIES_BY_TYPE.overig;
+  const byDate = [...bonnetjes].sort((a,b)=>a.datum.localeCompare(b.datum));
+  const dates  = [...new Set(byDate.map(b=>b.datum))];
+
+  if (!dates.length) { el.innerHTML=`<div style="text-align:center;padding:40px;font-family:'DM Mono';font-size:13px;color:var(--ink3)">Nog geen bonnetjes.</div>`; return; }
+
+  let running = 0;
+  el.innerHTML = `<div style="max-width:700px">` + dates.map(d => {
+    const items    = byDate.filter(b=>b.datum===d);
+    const dayTotal = items.reduce((s,b)=>s+netto(b),0);
+    running += dayTotal;
+    return `<div class="tl-row">
+      <div class="tl-date"><div class="tl-day">${d.slice(8)}</div><div class="tl-month">${MONTHS[parseInt(d.slice(5,7))-1]}</div></div>
+      <div class="tl-line"><div class="tl-dot"></div><div class="tl-track"></div></div>
+      <div class="tl-items">
+        ${items.map(b => {
+          const cat = cats.find(c=>c.id===b.splits?.[0]?.catId);
+          return `<div class="bonnetje-card" style="margin-bottom:6px;border-left:4px solid ${cat?.color||'var(--border)'}">
+            <div class="bc-main" style="cursor:default">
+              <div class="bc-body">
+                <div class="bc-top">
+                  <span class="bc-winkel">${escH(b.winkel||'?')}</span>
+                  <span class="bc-bedrag">${fmt(netto(b))}</span>
+                </div>
+                <div class="bc-meta">
+                  <span style="font-family:'DM Mono';font-size:10px;color:var(--ink3)">${escH(b.persoon||'')} · ${cat?.emoji||''} ${cat?.label||''}</span>
+                </div>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+        <div class="tl-running">Dag: ${fmt(dayTotal)} · Lopend: ${fmt(running)}</div>
+      </div>
+    </div>`;
+  }).join('') + '</div>';
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INSTELLINGEN TAB
+// ══════════════════════════════════════════════════════════════════════════════
+function renderInstellingen() {
+  const el = document.getElementById('tab-instellingen');
+  const p  = currentProject;
+  if (!p) return;
+
+  el.innerHTML = `
+    <div style="max-width:560px;display:flex;flex-direction:column;gap:14px">
+
+      <div class="settings-section">
+        <h3>PROJECT</h3>
+        <div class="setting-row">
+          <div><div class="sr-label">Naam</div><div class="sr-sub">${escH(p.name)}</div></div>
+          <button class="sr-btn" onclick="editProjectName()">Wijzigen</button>
+        </div>
+        <div class="setting-row">
+          <div><div class="sr-label">Type</div><div class="sr-sub">${getTypeEmoji(p.type)} ${projectTypes.find(t=>t.id===p.type)?.label||p.type}</div></div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>DEELNEMERS</h3>
+        <div id="members-list">
+          ${(p.members||[]).map(m=>`
+            <div class="setting-row">
+              <div><div class="sr-label">${escH(m.name||m.email)}</div><div class="sr-sub">${escH(m.email)}</div></div>
+              <button class="sr-btn" style="color:var(--red)" onclick="removeMemberFromProject('${escH(m.email)}')">Verwijderen</button>
+            </div>`).join('')}
+        </div>
+        <button class="btn-secondary" style="margin-top:12px;font-size:12px;padding:8px 16px" onclick="showAddMemberModal()">+ Deelnemer toevoegen</button>
+      </div>
+
+      <div class="settings-section">
+        <h3>GOOGLE KOPPELINGEN</h3>
+        <div class="setting-row">
+          <div>
+            <div class="sr-label"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.sheetId?'var(--green)':'var(--ink3)'};margin-right:5px"></span>Google Sheets</div>
+            <div class="sr-sub">${p.sheetId ? 'Gekoppeld · '+p.sheetId.slice(0,20)+'…' : 'Niet gekoppeld'}</div>
+          </div>
+          <button class="sr-btn" onclick="editSheetId()">Wijzigen</button>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="sr-label"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.folderId?'var(--green)':'var(--ink3)'};margin-right:5px"></span>Google Drive map</div>
+            <div class="sr-sub">${p.folderId ? 'Gekoppeld · '+p.folderId.slice(0,20)+'…' : 'Niet gekoppeld'}</div>
+          </div>
+          <button class="sr-btn" onclick="editFolderId()">Wijzigen</button>
+        </div>
+      </div>
+
+      <div class="settings-section danger">
+        <h3>GEVAARLIJK</h3>
+        <div class="setting-row">
+          <div><div class="sr-label">Project archiveren</div><div class="sr-sub">Verbergt het project voor alle deelnemers</div></div>
+          <button class="sr-btn" style="color:var(--red)" onclick="archiveProject()">Archiveren</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+window.editProjectName = () => showInputModal('Projectnaam', currentProject.name, async v => {
+  await updateProject(currentProject.id, { name: v });
+  currentProject.name = v;
+  document.getElementById('app-title').textContent = v;
+  renderInstellingen(); renderProjectTabs();
+});
+
+window.editSheetId  = () => showInputModal('Google Sheet ID', currentProject.sheetId||'', async v => {
+  await updateProject(currentProject.id, { sheetId: v }); currentProject.sheetId = v; renderInstellingen();
+});
+window.editFolderId = () => showInputModal('Google Drive map ID', currentProject.folderId||'', async v => {
+  await updateProject(currentProject.id, { folderId: v }); currentProject.folderId = v; renderInstellingen();
+});
+
+window.archiveProject = async () => {
+  if (!confirm(`Project "${currentProject.name}" archiveren?`)) return;
+  await deleteProject(currentProject.id);
+  projects = projects.filter(p => p.id !== currentProject.id);
+  currentProject = null;
+  renderProjectTabs();
+  if (projects.length) openProject(projects[0]);
+  else showScreen('empty');
+};
+
+window.showAddMemberModal = () => {
+  showModal(`
+    <div class="modal-title">DEELNEMER TOEVOEGEN</div>
+    <div class="modal-sub">Voer het e-mailadres in van de persoon die je wil toevoegen. Ze kunnen inloggen via Google.</div>
+    <div class="f-group"><label class="f-label">Naam</label><input class="f-inp" id="new-m-name" type="text" placeholder="Voornaam"/></div>
+    <div class="f-group"><label class="f-label">E-mailadres</label><input class="f-inp" id="new-m-email" type="email" placeholder="naam@gmail.com"/></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal()">Annuleren</button>
+      <button class="btn-primary" onclick="doAddMember()">Toevoegen</button>
+    </div>`);
+};
+
+window.doAddMember = async () => {
+  const name  = document.getElementById('new-m-name')?.value.trim();
+  const email = document.getElementById('new-m-email')?.value.trim();
+  if (!email) return;
+  const members = [...(currentProject.members||[]), { name: name||email, email }];
+  await updateProject(currentProject.id, { members });
+  currentProject.members = members;
+  closeModal(); renderInstellingen();
+  syncMsg('✓ Deelnemer toegevoegd', 'ok');
+};
+
+window.removeMemberFromProject = async email => {
+  if (!confirm(`${email} verwijderen uit dit project?`)) return;
+  const members = (currentProject.members||[]).filter(m => m.email !== email);
+  await updateProject(currentProject.id, { members });
+  currentProject.members = members;
+  renderInstellingen();
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// WIZARD (nieuw project)
+// ══════════════════════════════════════════════════════════════════════════════
+let wizStep = 0, wizData = {};
+
+function startWizard() {
+  wizStep = 0;
+  wizData = { name:'', type:'', members:[], sheetId:'', folderId:'' };
+  showScreen('wizard');
+  renderWizardStep();
+}
+
+function renderWizardStep() {
+  const wrap = document.getElementById('wiz-wrap');
+  const hasProjects = projects.length > 0;
+
+  let backHtml = hasProjects
+    ? `<button class="wiz-back" onclick="backToApp()">← Terug naar app</button>` : '';
+
+  const dots = Array.from({length:4}, (_,i) =>
+    `<div class="wiz-dot ${i<wizStep?'done':i===wizStep?'active':''}"></div>`).join('');
+
+  const steps = [renderWizStep0, renderWizStep1, renderWizStep2, renderWizStep3];
+  wrap.innerHTML = `
+    <div style="max-width:540px;margin:0 auto;padding:40px 20px">
+      ${backHtml}
+      <div class="wiz-progress">${dots}</div>
+      <div class="wiz-card" id="wiz-card"></div>
+    </div>`;
+  steps[wizStep](document.getElementById('wiz-card'));
+}
+
+function renderWizStep0(card) {
+  card.innerHTML = `
+    <div class="wiz-title">NIEUW PROJECT</div>
+    <div class="wiz-sub">Hoe heet dit project? Kies een naam die je makkelijk herkent.</div>
+    <div class="f-group"><label class="f-label">Projectnaam</label>
+      <input class="f-inp" id="w-name" type="text" placeholder="bijv. Badkamer 2026" value="${escH(wizData.name)}"/></div>
+    <div class="wiz-nav">
+      <span></span>
+      <button class="btn-primary" onclick="wizNext0()">Volgende →</button>
+    </div>`;
+  setTimeout(() => document.getElementById('w-name')?.focus(), 50);
+}
+window.wizNext0 = () => {
+  const v = document.getElementById('w-name')?.value.trim();
+  if (!v) return;
+  wizData.name = v; wizStep++; renderWizardStep();
+};
+
+function renderWizStep1(card) {
+  card.innerHTML = `
+    <div class="wiz-title">TYPE PROJECT</div>
+    <div class="wiz-sub">Kies het type. Dit bepaalt de standaard categorieën die je kunt gebruiken.</div>
+    <div class="type-grid">
+      ${projectTypes.filter(t=>t.active).map(t=>`
+        <div class="type-btn ${wizData.type===t.id?'active':''}" onclick="selectType('${t.id}')">
+          <div class="te">${t.emoji}</div>
+          <div class="tl">${t.label}</div>
+        </div>`).join('')}
+    </div>
+    <div class="wiz-nav">
+      <button class="btn-secondary" onclick="wizPrev()">← Terug</button>
+      <button class="btn-primary" onclick="wizNext1()" ${!wizData.type?'disabled':''} id="wiz-next1">Volgende →</button>
+    </div>`;
+}
+window.selectType = id => { wizData.type=id; renderWizardStep(); };
+window.wizNext1   = () => { if(!wizData.type)return; wizStep++; renderWizardStep(); };
+
+function renderWizStep2(card) {
+  const rows = wizData.members.map((m,i)=>`
+    <div class="member-row">
+      <input class="f-inp" type="text" placeholder="Naam" value="${escH(m.name||'')}" oninput="updateWizMember(${i},'name',this.value)"/>
+      <input class="f-inp" type="email" placeholder="e-mailadres" value="${escH(m.email||'')}" oninput="updateWizMember(${i},'email',this.value)"/>
+      ${i>0?`<button class="btn-rm" onclick="removeWizMember(${i})">×</button>`:''}
+    </div>`).join('');
+
+  card.innerHTML = `
+    <div class="wiz-title">DEELNEMERS</div>
+    <div class="wiz-sub">Wie doet er mee? Voeg e-mailadressen toe — zij kunnen inloggen met dat Google-account.</div>
+    <div class="member-rows" id="wiz-members">${rows}</div>
+    <button class="btn-add-row" onclick="addWizMember()">+ Nog iemand toevoegen</button>
+    <div class="wiz-nav" style="margin-top:20px">
+      <button class="btn-secondary" onclick="wizPrev()">← Terug</button>
+      <button class="btn-primary" onclick="wizStep++;renderWizardStep()">Volgende →</button>
+    </div>`;
+  if (!wizData.members.length) { wizData.members.push({name:'',email:''}); renderWizardStep(); }
+}
+window.updateWizMember = (i,k,v) => { wizData.members[i][k]=v; };
+window.removeWizMember = i => { wizData.members.splice(i,1); renderWizardStep(); };
+window.addWizMember    = () => { wizData.members.push({name:'',email:''}); renderWizardStep(); };
+
+function renderWizStep3(card) {
+  card.innerHTML = `
+    <div class="wiz-title">GOOGLE KOPPELEN</div>
+    <div class="wiz-sub">Optioneel — je kunt dit ook later instellen via Instellingen.</div>
+
+    <div class="connect-block">
+      <div class="cb-head"><span class="cb-name">📊 Google Sheets</span>
+        <span class="cb-status ${wizData.sheetId?'ok':''}">${wizData.sheetId?'✓ Ingevuld':'Optioneel'}</span></div>
+      <input class="f-inp" id="w-sheet" type="text" placeholder="Sheet ID" value="${escH(wizData.sheetId)}"/>
+      <div class="f-hint">docs.google.com/spreadsheets/d/<code>SHEET_ID</code>/edit</div>
+    </div>
+
+    <div class="connect-block">
+      <div class="cb-head"><span class="cb-name">📁 Google Drive map</span>
+        <span class="cb-status ${wizData.folderId?'ok':''}">${wizData.folderId?'✓ Ingevuld':'Optioneel'}</span></div>
+      <input class="f-inp" id="w-folder" type="text" placeholder="Map ID" value="${escH(wizData.folderId)}"/>
+      <div class="f-hint">drive.google.com/drive/folders/<code>MAP_ID</code></div>
+    </div>
+
+    <div class="wiz-nav">
+      <button class="btn-secondary" onclick="wizPrev()">← Terug</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn-ghost" onclick="finishWizard()">Overslaan</button>
+        <button class="btn-primary" onclick="finishWizardWithGoogle()">Project aanmaken ✓</button>
+      </div>
+    </div>`;
+}
+
+window.wizPrev = () => { wizStep--; renderWizardStep(); };
+window.backToApp = () => { if(currentProject) { showScreen('app'); } else showScreen('empty'); };
+window.finishWizard = () => finishWizardWithGoogle(true);
+window.finishWizardWithGoogle = async (skipGoogle=false) => {
+  if (!skipGoogle) {
+    wizData.sheetId  = document.getElementById('w-sheet')?.value.trim()||'';
+    wizData.folderId = document.getElementById('w-folder')?.value.trim()||'';
+  }
+  syncMsg('⏳ Project aanmaken…');
+  try {
+    const members = wizData.members.filter(m=>m.email.trim());
+    const pid     = await createProject({
+      name:     wizData.name,
+      type:     wizData.type,
+      members,
+      sheetId:  wizData.sheetId||'',
+      folderId: wizData.folderId||''
+    });
+    syncMsg('✓ Project aangemaakt!', 'ok');
+    projects = await getMyProjects();
+    renderProjectTabs();
+    const newProj = projects.find(p=>p.id===pid);
+    if (newProj) openProject(newProj);
+  } catch(e) { syncMsg('⚠ Mislukt: '+e.message, 'err'); }
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════════════════════
+window.doExportCSV  = () => exportCSV(bonnetjes, CATEGORIES_BY_TYPE[currentProject?.type]||[], currentProject?.name);
+window.openDriveFolder = () => {
+  if (currentProject?.folderId) window.open(`https://drive.google.com/drive/folders/${currentProject.folderId}`);
+  else alert('Geen Drive map ingesteld. Ga naar Instellingen.');
+};
+
+function showInputModal(label, current, onSave) {
+  showModal(`
+    <div class="modal-title">${escH(label)} WIJZIGEN</div>
+    <div class="f-group"><label class="f-label">${escH(label)}</label>
+      <input class="f-inp" id="modal-inp" type="text" value="${escH(current)}"/></div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeModal()">Annuleren</button>
+      <button class="btn-primary" onclick="doModalSave()">Opslaan</button>
+    </div>`);
+  window._modalSaveFn = onSave;
+  setTimeout(()=>document.getElementById('modal-inp')?.focus(),50);
+}
+window.doModalSave = async () => {
+  const v = document.getElementById('modal-inp')?.value.trim();
+  if (v !== undefined && window._modalSaveFn) await window._modalSaveFn(v);
+  closeModal();
+};
+
+function showModal(html) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'modal-overlay';
+  overlay.innerHTML = `<div class="modal-box">${html}</div>`;
+  overlay.addEventListener('click', e => { if(e.target===overlay) closeModal(); });
+  document.body.appendChild(overlay);
+}
+window.closeModal = () => document.getElementById('modal-overlay')?.remove();
+
+let _syncTimer;
+function syncMsg(txt, type='') {
+  const el = document.getElementById('sync-msg');
+  el.textContent = txt;
+  el.className = 'sync-msg show ' + type;
+  clearTimeout(_syncTimer);
+  if (type) _syncTimer = setTimeout(()=>el.classList.remove('show'), 3000);
+}
+
+// Button bindings
+document.getElementById('btn-new-proj').onclick     = startWizard;
+document.getElementById('btn-start-wizard').onclick  = startWizard;
+</script>
+</body>
+</html>
