@@ -1197,10 +1197,10 @@ function renderWizardStep() {
   let backHtml = hasProjects
     ? `<button class="wiz-back" onclick="backToApp()">← Terug naar app</button>` : '';
 
-  const dots = Array.from({length:4}, (_,i) =>
+  const dots = Array.from({length:3}, (_,i) =>
     `<div class="wiz-dot ${i<wizStep?'done':i===wizStep?'active':''}"></div>`).join('');
 
-  const steps = [renderWizStep0, renderWizStep1, renderWizStep2, renderWizStep3];
+  const steps = [renderWizStep0, renderWizStep1, renderWizStep3];
   wrap.innerHTML = `
     <div style="max-width:540px;margin:0 auto;padding:40px 20px">
       ${backHtml}
